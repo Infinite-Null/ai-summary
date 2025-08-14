@@ -4,17 +4,27 @@ import {
 	SystemMessage,
 } from '@langchain/core/messages';
 import { StringOutputParser } from '@langchain/core/output_parsers';
+import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
 import {
 	ChatGoogleGenerativeAI,
 	GoogleGenerativeAIEmbeddings,
 } from '@langchain/google-genai';
+import { Annotation, Send, StateGraph } from '@langchain/langgraph';
 import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import fs from 'fs';
 import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
+import {
+	collapseDocs,
+	splitListOfDocs,
+} from 'langchain/chains/combine_documents/reduce';
+import { Document } from 'langchain/document';
+import { TextLoader } from 'langchain/document_loaders/fs/text';
+import {
+	RecursiveCharacterTextSplitter,
+	TokenTextSplitter,
+} from 'langchain/text_splitter';
 import { Langfuse } from 'langfuse';
-import { PromptTemplate } from '@langchain/core/prompts';
-import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import {
 	GoogleModels,
 	ModelProvider,
@@ -24,15 +34,6 @@ import {
 } from './dto/quick-ask.dto';
 import { SummaryStuffDTO } from './dto/summary-dto';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
-import { TextLoader } from 'langchain/document_loaders/fs/text';
-import { TokenTextSplitter } from 'langchain/text_splitter';
-import { StateGraph, Annotation, Send } from '@langchain/langgraph';
-import { Document } from 'langchain/document';
-import {
-	collapseDocs,
-	splitListOfDocs,
-} from 'langchain/chains/combine_documents/reduce';
 
 interface SummaryState {
 	content: string;
@@ -371,6 +372,15 @@ export class AiEngineService {
 	}
 
 	async summerizeStuff({ provider, model, temperature }: SummaryStuffDTO) {
+		const trace = this.langfuse.trace({
+			name: 'ai-poc-stuff-summarization',
+			metadata: {
+				provider,
+				model,
+				temperature,
+			},
+		});
+
 		const fileData = fs.readFileSync(__dirname + '/dataset.txt', 'utf-8');
 
 		const splitter = new RecursiveCharacterTextSplitter({
@@ -384,7 +394,7 @@ export class AiEngineService {
 
 		const llm = this.createModelInstance(provider, model, temperature);
 		const prompt = PromptTemplate.fromTemplate(
-			'Summarize the main themes retrieved from docs: {context}',
+			'Write a detailed summary of the following: \n\n{context}',
 		);
 
 		const chain = await createStuffDocumentsChain({
@@ -393,8 +403,23 @@ export class AiEngineService {
 			prompt,
 		});
 
+		const generation = trace.generation({
+			name: `${provider}-${model}-generation`,
+			model: model,
+			input: { messages: prompt },
+			modelParameters: {
+				temperature: temperature || 0.7,
+			},
+		});
+
 		// Normal
 		const result = await chain.invoke({ context: docs });
+
+		generation.end({
+			output: result,
+		});
+
+		await this.langfuse.shutdownAsync();
 
 		return { summary: result };
 	}
