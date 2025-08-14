@@ -1,4 +1,12 @@
+import {
+	AIMessageChunk,
+	HumanMessage,
+	SystemMessage,
+} from '@langchain/core/messages';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Langfuse } from 'langfuse';
 import {
 	GoogleModels,
 	ModelProvider,
@@ -6,17 +14,20 @@ import {
 	QuickAskDTO,
 	SupportedModels,
 } from './dto/quick-ask.dto';
-import { ChatOpenAI } from '@langchain/openai';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import {
-	AIMessageChunk,
-	HumanMessage,
-	SystemMessage,
-} from '@langchain/core/messages';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 
 @Injectable()
 export class AiEngineService {
+	private readonly langfuse: Langfuse;
+
+	constructor() {
+		this.langfuse = new Langfuse({
+			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+			secretKey: process.env.LANGFUSE_SECRET_KEY,
+			baseUrl: process.env.LANGFUSE_BASE_URL,
+		});
+	}
+
 	/**
 	 * Creates an instance of the AI model.
 	 *
@@ -73,12 +84,39 @@ export class AiEngineService {
 			new HumanMessage(userQuery),
 		];
 
+		const trace = this.langfuse.trace({
+			name: 'ai-poc',
+			metadata: {
+				provider,
+				userQuery,
+				model,
+				temperature,
+			},
+		});
+
 		const modelInstance = this.createModelInstance(
 			provider,
 			model,
 			temperature,
 		);
 
-		return modelInstance.invoke(messages);
+		const generation = trace.generation({
+			name: `${provider}-generation`,
+			model: model || 'gpt-3.5-turbo',
+			input: { messages: userQuery },
+			modelParameters: {
+				temperature: temperature || 0.7,
+			},
+		});
+
+		const response = await modelInstance.invoke(messages);
+
+		generation.end({
+			output: response.content,
+		});
+
+		await this.langfuse.shutdownAsync();
+
+		return response;
 	}
 }
