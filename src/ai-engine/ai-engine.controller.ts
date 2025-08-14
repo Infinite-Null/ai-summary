@@ -28,6 +28,11 @@ export class AiEngineController {
 		return this.aiEngineService.quickAsk(quickAskDto);
 	}
 
+	@Post('/summarize')
+	summarize() {
+		return this.aiEngineService.mapReduceSummarization();
+	}
+
 	@Post('/summerize-stuff')
 	summerizeStuff(
 		@Body(new ValidationPipe()) summaryStuffDto: SummaryStuffDTO,
