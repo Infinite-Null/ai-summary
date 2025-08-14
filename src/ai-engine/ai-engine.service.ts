@@ -1,4 +1,12 @@
+import {
+	AIMessageChunk,
+	HumanMessage,
+	SystemMessage,
+} from '@langchain/core/messages';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Langfuse } from 'langfuse';
 import {
 	GoogleModels,
 	ModelProvider,
@@ -6,13 +14,6 @@ import {
 	QuickAskDTO,
 	SupportedModels,
 } from './dto/quick-ask.dto';
-import { ChatOpenAI } from '@langchain/openai';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import {
-	AIMessageChunk,
-	HumanMessage,
-	SystemMessage,
-} from '@langchain/core/messages';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
@@ -40,6 +41,15 @@ const OverallState = Annotation.Root({
 @Injectable()
 export class AiEngineService {
 	private readonly tokenMax = 4000;
+	private readonly langfuse: Langfuse;
+
+	constructor() {
+		this.langfuse = new Langfuse({
+			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+			secretKey: process.env.LANGFUSE_SECRET_KEY,
+			baseUrl: process.env.LANGFUSE_BASE_URL,
+		});
+	}
 
 	/**
 	 * Creates an instance of the AI model.
@@ -97,24 +107,60 @@ export class AiEngineService {
 			new HumanMessage(userQuery),
 		];
 
+		const trace = this.langfuse.trace({
+			name: 'ai-poc',
+			metadata: {
+				provider,
+				userQuery,
+				model,
+				temperature,
+			},
+		});
+
 		const modelInstance = this.createModelInstance(
 			provider,
 			model,
 			temperature,
 		);
 
-		return modelInstance.invoke(messages);
+		const generation = trace.generation({
+			name: `${provider}-${model}-generation`,
+			model: model || 'gpt-3.5-turbo',
+			input: { messages: userQuery },
+			modelParameters: {
+				temperature: temperature || 0.7,
+			},
+		});
+
+		const response = await modelInstance.invoke(messages);
+
+		generation.end({
+			output: response.content,
+		});
+
+		await this.langfuse.shutdownAsync();
+
+		return response;
 	}
 
 	/**
 	 * Performs a map-reduce summarization of the provided data.
 	 */
 	async mapReduceSummarization() {
-		const llm = this.createModelInstance(
-			ModelProvider.GOOGLE,
-			GoogleModels.GEMINI_2_FLASH,
-			0.7,
-		);
+		const provider = ModelProvider.OPENAI;
+		const model = OpenAIModels.GPT_3_5_TURBO;
+		const temperature = 0.8;
+
+		const llm = this.createModelInstance(provider, model, temperature);
+
+		const trace = this.langfuse.trace({
+			name: 'ai-poc-map-reduce-summarization',
+			metadata: {
+				provider,
+				model,
+				temperature,
+			},
+		});
 
 		// Load documents using a text based loader.
 		const loader = new TextLoader('dataset.txt');
@@ -153,11 +199,26 @@ export class AiEngineService {
 			return tokenCounts.reduce((sum, count) => sum + count, 0);
 		}
 
-		async function _reduce(input) {
+		async function _reduce(input: Document[]) {
 			const prompt = await reducePrompt.invoke({
-				docs: input as Document[],
+				docs: input,
 			});
+
+			const generation = trace.generation({
+				name: `${provider}-${model}-generation`,
+				model: model,
+				input: { messages: prompt },
+				modelParameters: {
+					temperature: temperature,
+				},
+			});
+
 			const response = await llm.invoke(prompt);
+
+			generation.end({
+				output: response.content,
+			});
+
 			return String(
 				typeof response.content === 'object'
 					? JSON.stringify(response.content)
@@ -184,8 +245,22 @@ export class AiEngineService {
 		const generateSummary = async (
 			state: SummaryState,
 		): Promise<{ summaries: string[] }> => {
+			const generation = trace.generation({
+				name: `${provider}-${model}-generation`,
+				model: model,
+				input: { messages: state.content },
+				modelParameters: {
+					temperature: temperature,
+				},
+			});
+
 			const prompt = await mapPrompt.invoke({ context: state.content });
 			const response = await llm.invoke(prompt);
+
+			generation.end({
+				output: response.content,
+			});
+
 			return {
 				summaries: [
 					typeof response.content === 'object'
@@ -258,6 +333,7 @@ export class AiEngineService {
 			}
 		}
 
+		await this.langfuse.shutdownAsync();
 		return finalSummary;
 	}
 }
