@@ -36,6 +36,7 @@ export default tseslint.config(
 		  trailingComma: 'all',
 		  useTabs: true,
 		  tabWidth: 4,
+		  bracketSpacing: true,
 		},
 	  ],
     },
