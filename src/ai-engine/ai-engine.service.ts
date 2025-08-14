@@ -3,9 +3,27 @@ import {
 	HumanMessage,
 	SystemMessage,
 } from '@langchain/core/messages';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { ChatOpenAI } from '@langchain/openai';
+import { StringOutputParser } from '@langchain/core/output_parsers';
+import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
+import {
+	ChatGoogleGenerativeAI,
+	GoogleGenerativeAIEmbeddings,
+} from '@langchain/google-genai';
+import { Annotation, Send, StateGraph } from '@langchain/langgraph';
+import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
 import { BadRequestException, Injectable } from '@nestjs/common';
+import fs from 'fs';
+import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
+import {
+	collapseDocs,
+	splitListOfDocs,
+} from 'langchain/chains/combine_documents/reduce';
+import { Document } from 'langchain/document';
+import { TextLoader } from 'langchain/document_loaders/fs/text';
+import {
+	RecursiveCharacterTextSplitter,
+	TokenTextSplitter,
+} from 'langchain/text_splitter';
 import { Langfuse } from 'langfuse';
 import {
 	GoogleModels,
@@ -14,16 +32,8 @@ import {
 	QuickAskDTO,
 	SupportedModels,
 } from './dto/quick-ask.dto';
+import { SummaryStuffDTO } from './dto/summary-dto';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
-import { TextLoader } from 'langchain/document_loaders/fs/text';
-import { TokenTextSplitter } from 'langchain/text_splitter';
-import { StateGraph, Annotation, Send } from '@langchain/langgraph';
-import { Document } from 'langchain/document';
-import {
-	collapseDocs,
-	splitListOfDocs,
-} from 'langchain/chains/combine_documents/reduce';
 
 interface SummaryState {
 	content: string;
@@ -79,6 +89,30 @@ export class AiEngineService {
 
 		// Fallback to the default provider (OpenAI).
 		return new ChatOpenAI({ model, temperature });
+	}
+
+	createEmbeddingInstance(
+		provider: ModelProvider = ModelProvider.OPENAI,
+		model: SupportedModels = OpenAIModels.GPT_3_5_TURBO,
+	): OpenAIEmbeddings | GoogleGenerativeAIEmbeddings {
+		if (!this.validateModel(provider, model)) {
+			throw new BadRequestException(
+				`Unsupported model ${model} for provider ${provider}.`,
+			);
+		}
+
+		if (provider === ModelProvider.GOOGLE) {
+			return new GoogleGenerativeAIEmbeddings({
+				apiKey: process.env.GOOGLE_API_KEY,
+				model: 'embedding-001',
+			});
+		}
+
+		// Fallback to the default provider (OpenAI).
+		return new OpenAIEmbeddings({
+			apiKey: process.env.OPENAI_API_KEY,
+			model: 'text-embedding-ada-002',
+		});
 	}
 
 	validateModel(provider: ModelProvider, model: SupportedModels): boolean {
@@ -335,5 +369,58 @@ export class AiEngineService {
 
 		await this.langfuse.shutdownAsync();
 		return finalSummary;
+	}
+
+	async summerizeStuff({ provider, model, temperature }: SummaryStuffDTO) {
+		const trace = this.langfuse.trace({
+			name: 'ai-poc-stuff-summarization',
+			metadata: {
+				provider,
+				model,
+				temperature,
+			},
+		});
+
+		const fileData = fs.readFileSync(__dirname + '/dataset.txt', 'utf-8');
+
+		const splitter = new RecursiveCharacterTextSplitter({
+			chunkSize: 500,
+			chunkOverlap: 50,
+		});
+
+		const docs = await splitter.splitDocuments([
+			new Document({ pageContent: fileData }),
+		]);
+
+		const llm = this.createModelInstance(provider, model, temperature);
+		const prompt = PromptTemplate.fromTemplate(
+			'Write a detailed summary of the following: \n\n{context}',
+		);
+
+		const chain = await createStuffDocumentsChain({
+			llm,
+			outputParser: new StringOutputParser(),
+			prompt,
+		});
+
+		const generation = trace.generation({
+			name: `${provider}-${model}-generation`,
+			model: model,
+			input: { messages: prompt },
+			modelParameters: {
+				temperature: temperature || 0.7,
+			},
+		});
+
+		// Normal
+		const result = await chain.invoke({ context: docs });
+
+		generation.end({
+			output: result,
+		});
+
+		await this.langfuse.shutdownAsync();
+
+		return { summary: result };
 	}
 }
