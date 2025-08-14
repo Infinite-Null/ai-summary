@@ -20,6 +20,7 @@ export class AiEngineService {
 	/**
 	 * Creates an instance of the AI model.
 	 *
+	 * @param provider - The model provider to use (OpenAI or Google).
 	 * @param model - The model to use for the AI engine.
 	 * @param temperature - The temperature setting for the model.
 	 * @returns An instance of the model or an error if the provider is not supported.
@@ -65,13 +66,19 @@ export class AiEngineService {
 		provider,
 		userQuery,
 		model,
+		temperature,
 	}: QuickAskDTO): Promise<AIMessageChunk> {
 		const messages = [
 			new SystemMessage(QUICK_ASK_SYSTEM_PROMPT),
 			new HumanMessage(userQuery),
 		];
 
-		const modelInstance = this.createModelInstance(provider, model);
+		const modelInstance = this.createModelInstance(
+			provider,
+			model,
+			temperature,
+		);
+
 		return modelInstance.invoke(messages);
 	}
 }
