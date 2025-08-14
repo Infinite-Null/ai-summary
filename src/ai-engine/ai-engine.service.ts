@@ -3,10 +3,20 @@ import {
 	HumanMessage,
 	SystemMessage,
 } from '@langchain/core/messages';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { ChatOpenAI } from '@langchain/openai';
+import { StringOutputParser } from '@langchain/core/output_parsers';
+import {
+	ChatGoogleGenerativeAI,
+	GoogleGenerativeAIEmbeddings,
+} from '@langchain/google-genai';
+import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
 import { BadRequestException, Injectable } from '@nestjs/common';
+import fs from 'fs';
+import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
+import { Document } from 'langchain/document';
 import { Langfuse } from 'langfuse';
+
+import { PromptTemplate } from '@langchain/core/prompts';
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import {
 	GoogleModels,
 	ModelProvider,
@@ -14,6 +24,7 @@ import {
 	QuickAskDTO,
 	SupportedModels,
 } from './dto/quick-ask.dto';
+import { SummaryStuffDTO } from './dto/summary-dto';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 
 @Injectable()
@@ -56,6 +67,30 @@ export class AiEngineService {
 
 		// Fallback to the default provider (OpenAI).
 		return new ChatOpenAI({ model, temperature });
+	}
+
+	createEmbeddingInstance(
+		provider: ModelProvider = ModelProvider.OPENAI,
+		model: SupportedModels = OpenAIModels.GPT_3_5_TURBO,
+	): OpenAIEmbeddings | GoogleGenerativeAIEmbeddings {
+		if (!this.validateModel(provider, model)) {
+			throw new BadRequestException(
+				`Unsupported model ${model} for provider ${provider}.`,
+			);
+		}
+
+		if (provider === ModelProvider.GOOGLE) {
+			return new GoogleGenerativeAIEmbeddings({
+				apiKey: process.env.GOOGLE_API_KEY,
+				model: 'embedding-001',
+			});
+		}
+
+		// Fallback to the default provider (OpenAI).
+		return new OpenAIEmbeddings({
+			apiKey: process.env.OPENAI_API_KEY,
+			model: 'text-embedding-ada-002',
+		});
 	}
 
 	validateModel(provider: ModelProvider, model: SupportedModels): boolean {
@@ -118,5 +153,34 @@ export class AiEngineService {
 		await this.langfuse.shutdownAsync();
 
 		return response;
+	}
+
+	async summerizeStuff({ provider, model, temperature }: SummaryStuffDTO) {
+		const fileData = fs.readFileSync(__dirname + '/dataset.txt', 'utf-8');
+
+		const splitter = new RecursiveCharacterTextSplitter({
+			chunkSize: 500,
+			chunkOverlap: 50,
+		});
+
+		const docs = await splitter.splitDocuments([
+			new Document({ pageContent: fileData }),
+		]);
+
+		const llm = this.createModelInstance(provider, model, temperature);
+		const prompt = PromptTemplate.fromTemplate(
+			'Summarize the main themes retrieved from docs: {context}',
+		);
+
+		const chain = await createStuffDocumentsChain({
+			llm,
+			outputParser: new StringOutputParser(),
+			prompt,
+		});
+
+		// Normal
+		const result = await chain.invoke({ context: docs });
+
+		return { summary: result };
 	}
 }
