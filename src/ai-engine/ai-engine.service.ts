@@ -101,7 +101,7 @@ export class AiEngineService {
 		);
 
 		const generation = trace.generation({
-			name: `${provider}-generation`,
+			name: `${provider}-${model}-generation`,
 			model: model || 'gpt-3.5-turbo',
 			input: { messages: userQuery },
 			modelParameters: {
