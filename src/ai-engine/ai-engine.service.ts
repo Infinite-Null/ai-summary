@@ -12,9 +12,7 @@ import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import fs from 'fs';
 import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
-import { Document } from 'langchain/document';
 import { Langfuse } from 'langfuse';
-
 import { PromptTemplate } from '@langchain/core/prompts';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import {
