@@ -12,7 +12,6 @@ import {
 import { Annotation, Send, StateGraph } from '@langchain/langgraph';
 import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
 import { BadRequestException, Injectable } from '@nestjs/common';
-import fs from 'fs';
 import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
 import {
 	collapseDocs,
@@ -20,10 +19,7 @@ import {
 } from 'langchain/chains/combine_documents/reduce';
 import { Document } from 'langchain/document';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
-import {
-	RecursiveCharacterTextSplitter,
-	TokenTextSplitter,
-} from 'langchain/text_splitter';
+import { TokenTextSplitter } from 'langchain/text_splitter';
 import { Langfuse } from 'langfuse';
 import {
 	GoogleModels,
@@ -381,16 +377,8 @@ export class AiEngineService {
 			},
 		});
 
-		const fileData = fs.readFileSync(__dirname + '/dataset.txt', 'utf-8');
-
-		const splitter = new RecursiveCharacterTextSplitter({
-			chunkSize: 500,
-			chunkOverlap: 50,
-		});
-
-		const docs = await splitter.splitDocuments([
-			new Document({ pageContent: fileData }),
-		]);
+		const loader = new TextLoader('dataset.txt');
+		const docs = await loader.load();
 
 		const llm = this.createModelInstance(provider, model, temperature);
 		const prompt = PromptTemplate.fromTemplate(
