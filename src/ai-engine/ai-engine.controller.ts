@@ -1,5 +1,7 @@
-import { Controller } from '@nestjs/common';
+import { Body, Controller, Post, ValidationPipe } from '@nestjs/common';
 import { AiEngineService } from './ai-engine.service';
+import { QuickAskDTO } from './dto/quick-ask.dto';
+import { ApiTags } from '@nestjs/swagger';
 
 /**
  * Controller responsible for handling AI Engine endpoints.
@@ -12,10 +14,16 @@ import { AiEngineService } from './ai-engine.service';
  * @routePrefix ai-engine
  * @controller AiEngineController
  */
+@ApiTags('AI Engine')
 @Controller({
 	version: '1',
 	path: 'ai-engine',
 })
 export class AiEngineController {
 	constructor(private readonly aiEngineService: AiEngineService) {}
+
+	@Post('/quick-ask')
+	quickAsk(@Body(new ValidationPipe()) quickAskDto: QuickAskDTO) {
+		return this.aiEngineService.quickAsk(quickAskDto);
+	}
 }
