@@ -26,4 +26,9 @@ export class AiEngineController {
 	quickAsk(@Body(new ValidationPipe()) quickAskDto: QuickAskDTO) {
 		return this.aiEngineService.quickAsk(quickAskDto);
 	}
+
+	@Post('/summarize')
+	summarize() {
+		return this.aiEngineService.mapReduceSummarization();
+	}
 }

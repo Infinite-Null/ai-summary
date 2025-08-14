@@ -14,9 +14,33 @@ import {
 	SystemMessage,
 } from '@langchain/core/messages';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { TextLoader } from 'langchain/document_loaders/fs/text';
+import { TokenTextSplitter } from 'langchain/text_splitter';
+import { StateGraph, Annotation, Send } from '@langchain/langgraph';
+import { Document } from 'langchain/document';
+import {
+	collapseDocs,
+	splitListOfDocs,
+} from 'langchain/chains/combine_documents/reduce';
+
+interface SummaryState {
+	content: string;
+}
+
+const OverallState = Annotation.Root({
+	contents: Annotation<string[]>,
+	summaries: Annotation<string[]>({
+		reducer: (state, update) => state.concat(update),
+	}),
+	collapsedSummaries: Annotation<Document[]>,
+	finalSummary: Annotation<string>,
+});
 
 @Injectable()
 export class AiEngineService {
+	private readonly tokenMax = 4000;
+
 	/**
 	 * Creates an instance of the AI model.
 	 *
@@ -80,5 +104,160 @@ export class AiEngineService {
 		);
 
 		return modelInstance.invoke(messages);
+	}
+
+	/**
+	 * Performs a map-reduce summarization of the provided data.
+	 */
+	async mapReduceSummarization() {
+		const llm = this.createModelInstance(
+			ModelProvider.GOOGLE,
+			GoogleModels.GEMINI_2_FLASH,
+			0.7,
+		);
+
+		// Load documents using a text based loader.
+		const loader = new TextLoader('dataset.txt');
+		const docs = await loader.load();
+
+		const mapPrompt = ChatPromptTemplate.fromMessages([
+			['user', 'Write a concise summary of the following: \n\n{context}'],
+		]);
+
+		const reduceTemplate = `
+			The following is a set of summaries:
+			{docs}
+			Take these and distill it into a final, consolidated summary
+			of the main themes.
+		`;
+
+		const reducePrompt = ChatPromptTemplate.fromMessages([
+			['user', reduceTemplate],
+		]);
+
+		const textSplitter = new TokenTextSplitter({
+			chunkSize: 1000,
+			chunkOverlap: 0,
+		});
+
+		const splitDocs = await textSplitter.splitDocuments(docs);
+		const maxTokens = this.tokenMax;
+
+		// UTILS METHODS.
+		async function lengthFunction(documents: Document[]) {
+			const tokenCounts = await Promise.all(
+				documents.map(async (doc) => {
+					return llm.getNumTokens(doc.pageContent);
+				}),
+			);
+			return tokenCounts.reduce((sum, count) => sum + count, 0);
+		}
+
+		async function _reduce(input) {
+			const prompt = await reducePrompt.invoke({
+				docs: input as Document[],
+			});
+			const response = await llm.invoke(prompt);
+			return String(
+				typeof response.content === 'object'
+					? JSON.stringify(response.content)
+					: response.content,
+			);
+		}
+
+		const mapSummaries = (state: typeof OverallState.State) => {
+			return state.contents.map(
+				(content) => new Send('generateSummary', { content }),
+			);
+		};
+
+		async function shouldCollapse(state: typeof OverallState.State) {
+			const numTokens = await lengthFunction(state.collapsedSummaries);
+			if (numTokens > maxTokens) {
+				return 'collapseSummaries';
+			} else {
+				return 'generateFinalSummary';
+			}
+		}
+
+		// GENERATE SUMMARY.
+		const generateSummary = async (
+			state: SummaryState,
+		): Promise<{ summaries: string[] }> => {
+			const prompt = await mapPrompt.invoke({ context: state.content });
+			const response = await llm.invoke(prompt);
+			return {
+				summaries: [
+					typeof response.content === 'object'
+						? JSON.stringify(response.content)
+						: String(response.content),
+				],
+			};
+		};
+
+		// COLLECT SUMMARIES.
+		const collectSummaries = (state: typeof OverallState.State) => {
+			return {
+				collapsedSummaries: state.summaries.map(
+					(summary) => new Document({ pageContent: summary }),
+				),
+			};
+		};
+
+		// COLLAPSE SUMMARIES.
+		const collapseSummaries = async (state: typeof OverallState.State) => {
+			const docLists = splitListOfDocs(
+				state.collapsedSummaries,
+				lengthFunction,
+				this.tokenMax,
+			);
+			const results: Document[] = [];
+			for (const docList of docLists) {
+				results.push(await collapseDocs(docList, _reduce));
+			}
+
+			return { collapsedSummaries: results };
+		};
+
+		// GENERATE FINAL SUMMARY.
+		const generateFinalSummary = async (
+			state: typeof OverallState.State,
+		) => {
+			const response = await _reduce(state.collapsedSummaries);
+			return { finalSummary: response };
+		};
+
+		// Construct the graph.
+		const graph = new StateGraph(OverallState)
+			.addNode('generateSummary', generateSummary)
+			.addNode('collectSummaries', collectSummaries)
+			.addNode('collapseSummaries', collapseSummaries)
+			.addNode('generateFinalSummary', generateFinalSummary)
+			.addConditionalEdges('__start__', mapSummaries, ['generateSummary'])
+			.addEdge('generateSummary', 'collectSummaries')
+			.addConditionalEdges('collectSummaries', shouldCollapse, [
+				'collapseSummaries',
+				'generateFinalSummary',
+			])
+			.addConditionalEdges('collapseSummaries', shouldCollapse, [
+				'collapseSummaries',
+				'generateFinalSummary',
+			])
+			.addEdge('generateFinalSummary', '__end__');
+
+		const app = graph.compile();
+
+		let finalSummary: string | undefined = '';
+		for await (const step of await app.stream(
+			{ contents: splitDocs.map((doc) => doc.pageContent) },
+			{ recursionLimit: 10 },
+		)) {
+			console.log(Object.keys(step));
+			if ('generateFinalSummary' in step) {
+				finalSummary = step.generateFinalSummary?.finalSummary;
+			}
+		}
+
+		return finalSummary;
 	}
 }
