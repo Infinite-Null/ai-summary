@@ -1,9 +1,10 @@
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { JsonOutputParser } from '@langchain/core/output_parsers';
+import { PromptTemplate } from '@langchain/core/prompts';
 import { Injectable } from '@nestjs/common';
 import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
-import { StringOutputParser } from '@langchain/core/output_parsers';
-import { PromptTemplate } from '@langchain/core/prompts';
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { Document } from 'langchain/document';
+import { ProjectSummarySchema } from '../types/output';
 
 @Injectable()
 export class StuffService {
@@ -19,14 +20,20 @@ export class StuffService {
 		llm: BaseChatModel,
 		prompt: PromptTemplate,
 		docs: Document[],
-	): Promise<{ summary: string }> {
+	): Promise<ProjectSummarySchema> {
+		const jsonOutputParser = new JsonOutputParser<ProjectSummarySchema>();
+
 		const chain = await createStuffDocumentsChain({
 			llm,
-			outputParser: new StringOutputParser(),
+			outputParser: jsonOutputParser,
 			prompt,
 		});
 
-		const result = await chain.invoke({ context: docs });
-		return { summary: result };
+		const result = await chain.invoke({
+			context: docs,
+			format_instructions: jsonOutputParser.getFormatInstructions(),
+		});
+
+		return result;
 	}
 }

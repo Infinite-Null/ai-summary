@@ -1,3 +1,4 @@
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import {
 	AIMessageChunk,
 	HumanMessage,
@@ -10,6 +11,8 @@ import {
 } from '@langchain/google-genai';
 import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { readFileSync } from 'fs';
+import { Document } from 'langchain/document';
 import { Langfuse } from 'langfuse';
 import {
 	GoogleModels,
@@ -18,13 +21,10 @@ import {
 	QuickAskDTO,
 	SupportedModels,
 } from './dto/quick-ask.dto';
-import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { SummarizeDTO } from './dto/summarize-dto';
+import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
-import { readFileSync } from 'fs';
-import { Document } from 'langchain/document';
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 
 @Injectable()
 export class AiEngineService {
@@ -44,6 +44,37 @@ export class AiEngineService {
 	 * Langfuse instance for tracing and monitoring.
 	 */
 	private readonly langfuse: Langfuse;
+
+	/**
+	 * Prompt template for project performance report generation.
+	 */
+	private readonly prompt: string = `Using the context below, analyze the project data and create a structured project performance report.
+                
+                You must respond with a JSON object that strictly follows this format:
+                {{
+                    "projectName": "Name of the project",
+                    "from": "Start date in format YYYY-MM-DD",
+                    "to": "End date in format YYYY-MM-DD", 
+                    "projectStatus": "Green, Amber, or Red based on project progress",
+                    "riskBlockersActionsNeeded": "List critical items the client needs to be aware of - timeline changes, scope changes, access blocks, information/approval blocks, etc. List in most critical to least critical order. If no risks or blockers, indicate 'No critical risks or blockers identified.' Tag team member names who need to action items from the client.",
+                    "taskDetails": {{
+                        "completed": "List of completed tasks and achievements",
+                        "inProgress": "Tasks currently being worked on",
+                        "inReview": "Tasks that are completed but pending review or approval"
+			        }}
+                }}
+
+                Guidelines:
+                - ProjectName: Extract or infer the project name from the context
+                - Dates: Use the reporting period dates or infer appropriate date ranges
+                - Project_Status: Analyze progress and assign Green (on track), Amber (some concerns), or Red (significant issues)
+                - Risk_Blockers_Actions_Needed: Focus on actionable items requiring client attention
+                - Task Details: Categorize work items appropriately
+
+                Context:
+                {context}
+
+                {format_instructions}`;
 
 	constructor(
 		private readonly mapReduceService: MapReduceService,
@@ -197,12 +228,13 @@ export class AiEngineService {
 		const totalTokens = tokenCounts.reduce((sum, count) => sum + count, 0);
 
 		// If the total number of tokens is less than the maximum allowed, use the "stuff" summarization method.
-		if (totalTokens < this.MAX_TOKENS && algorithm !== 'map-reduce') {
+		if (
+			algorithm === 'stuff' ||
+			(algorithm === 'auto' && totalTokens < this.MAX_TOKENS)
+		) {
 			this.logger.log('Running stuff summarization algorithm');
 
-			const prompt = PromptTemplate.fromTemplate(
-				'Write a detailed summary of the following: \n\n{context}',
-			);
+			const prompt = PromptTemplate.fromTemplate(this.prompt);
 
 			return this.stuffService.summarize(llm, prompt, docs);
 		}
