@@ -204,6 +204,15 @@ export class AiEngineService {
 	}
 
 	async summarize({ provider, model, temperature, algorithm }: SummarizeDTO) {
+		const trace = this.langfuse.trace({
+			name: `ai-poc-${algorithm}-summarization`,
+			metadata: {
+				provider,
+				model,
+				temperature,
+			},
+		});
+
 		const llm = this.createModelInstance(provider, model, temperature);
 
 		// TODO: Implement data ingestion from API responses as tool execution and remove this line.
@@ -219,6 +228,11 @@ export class AiEngineService {
 		 */
 		const docs = [new Document({ pageContent: fileData, metadata: {} })];
 
+		const span = trace.span({
+			name: 'ai-poc-token-count',
+			input: docs.map((doc) => doc.pageContent),
+		});
+
 		const tokenCounts = await Promise.all(
 			docs.map(async (doc) => {
 				return llm.getNumTokens(doc.pageContent);
@@ -226,6 +240,12 @@ export class AiEngineService {
 		);
 
 		const totalTokens = tokenCounts.reduce((sum, count) => sum + count, 0);
+
+		span.end({
+			output: {
+				totalTokens,
+			},
+		});
 
 		// If the total number of tokens is less than the maximum allowed, use the "stuff" summarization method.
 		if (
@@ -236,7 +256,27 @@ export class AiEngineService {
 
 			const prompt = PromptTemplate.fromTemplate(this.prompt);
 
-			return this.stuffService.summarize(llm, prompt, docs);
+			const generation = trace.generation({
+				name: `${provider}-${model}-generation`,
+				model: model,
+				input: { messages: prompt },
+				modelParameters: {
+					temperature: temperature || 0.7,
+				},
+				metadata: {
+					totalTokens,
+					algorithm: 'stuff',
+				},
+			});
+
+			const result = await this.stuffService.summarize(llm, prompt, docs);
+
+			generation.end({
+				output: result,
+			});
+
+			await this.langfuse.shutdownAsync();
+			return result;
 		}
 
 		// Else, fall back to the map-reduce summarization method.
@@ -259,6 +299,19 @@ export class AiEngineService {
 
 		const finalPrompt = PromptTemplate.fromTemplate(this.prompt);
 
+		const generation = trace.generation({
+			name: `${provider}-${model}-generation`,
+			model: model,
+			input: { messages: prompt },
+			modelParameters: {
+				temperature: temperature || 0.7,
+			},
+			metadata: {
+				totalTokens,
+				algorithm: 'map-reduce',
+			},
+		});
+
 		const response = await this.mapReduceService.summarize(
 			llm,
 			docs,
@@ -266,6 +319,12 @@ export class AiEngineService {
 			reducePrompt,
 			finalPrompt,
 		);
+
+		generation.end({
+			output: response,
+		});
+
+		await this.langfuse.shutdownAsync();
 
 		return response;
 	}
