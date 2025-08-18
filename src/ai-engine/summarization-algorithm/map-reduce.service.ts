@@ -9,6 +9,7 @@ import {
 	splitListOfDocs,
 } from 'langchain/chains/combine_documents/reduce';
 import { TokenTextSplitter } from 'langchain/text_splitter';
+import { LangfuseTraceClient } from 'langfuse';
 import { ProjectSummarySchema } from '../types/output';
 
 interface SummaryState {
@@ -33,6 +34,11 @@ export class MapReduceService {
 	private finalPrompt: PromptTemplate;
 	private jsonOutputParser: JsonOutputParser<ProjectSummarySchema>;
 	private maxTokens: number;
+	private trace: LangfuseTraceClient;
+	private provider: string = 'openai';
+	private model: string = 'gpt-3.5-turbo';
+	private temperature: number = 0.7;
+	private totalTokens: number = 0;
 
 	private initialize(
 		llm: BaseChatModel,
@@ -40,6 +46,11 @@ export class MapReduceService {
 		reducePrompt: ChatPromptTemplate,
 		finalPrompt: PromptTemplate,
 		maxTokens: number,
+		trace: LangfuseTraceClient,
+		provider: string = 'openai',
+		model: string = 'gpt-3.5-turbo',
+		temperature: number = 0.7,
+		totalTokens: number = 0,
 	) {
 		this.llm = llm;
 		this.mapPrompt = mapPrompt;
@@ -47,6 +58,11 @@ export class MapReduceService {
 		this.finalPrompt = finalPrompt;
 		this.jsonOutputParser = new JsonOutputParser<ProjectSummarySchema>();
 		this.maxTokens = maxTokens;
+		this.trace = trace;
+		this.provider = provider;
+		this.model = model;
+		this.temperature = temperature;
+		this.totalTokens = totalTokens;
 	}
 
 	async summarize(
@@ -55,12 +71,28 @@ export class MapReduceService {
 		mapPrompt: ChatPromptTemplate,
 		reducePrompt: ChatPromptTemplate,
 		finalPrompt: PromptTemplate,
+		trace: LangfuseTraceClient,
+		provider: string = 'openai',
+		model: string = 'gpt-3.5-turbo',
+		temperature: number = 0.7,
+		totalTokens: number = 0,
 		chunkSize: number = 1_000,
 		chunkOverlap: number = 0,
 		maxTokens: number = 250_000,
 	): Promise<ProjectSummarySchema> {
 		// Initialize shared state.
-		this.initialize(llm, mapPrompt, reducePrompt, finalPrompt, maxTokens);
+		this.initialize(
+			llm,
+			mapPrompt,
+			reducePrompt,
+			finalPrompt,
+			maxTokens,
+			trace,
+			provider,
+			model,
+			temperature,
+			totalTokens,
+		);
 
 		const textSplitter = new TokenTextSplitter({
 			chunkSize,
@@ -149,7 +181,23 @@ export class MapReduceService {
 
 	private generateSummary = async (state: SummaryState) => {
 		const prompt = await this.mapPrompt.invoke({ context: state.content });
+
+		const generation = this.trace.generation({
+			name: `${this.provider}-${this.model}-generation`,
+			model: this.model,
+			input: { messages: prompt },
+			modelParameters: {
+				temperature: this.temperature || 0.7,
+			},
+			metadata: {
+				totalTokens: this.totalTokens,
+				algorithm: 'stuff',
+			},
+		});
+
 		const response = await this.llm.invoke(prompt);
+
+		generation.end({ output: response.content });
 
 		return {
 			summaries: [

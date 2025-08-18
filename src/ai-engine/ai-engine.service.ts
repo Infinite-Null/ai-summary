@@ -299,30 +299,18 @@ export class AiEngineService {
 
 		const finalPrompt = PromptTemplate.fromTemplate(this.prompt);
 
-		const generation = trace.generation({
-			name: `${provider}-${model}-generation`,
-			model: model,
-			input: { messages: finalPrompt },
-			modelParameters: {
-				temperature: temperature || 0.7,
-			},
-			metadata: {
-				totalTokens,
-				algorithm: 'map-reduce',
-			},
-		});
-
 		const response = await this.mapReduceService.summarize(
 			llm,
 			docs,
 			mapPrompt,
 			reducePrompt,
 			finalPrompt,
+			trace,
+			provider,
+			model,
+			temperature,
+			totalTokens,
 		);
-
-		generation.end({
-			output: response,
-		});
 
 		await this.langfuse.shutdownAsync();
 
