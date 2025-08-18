@@ -1,4 +1,3 @@
-import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsNumber, IsOptional, Max, Min } from 'class-validator';
 import {
 	GoogleModels,
@@ -6,8 +5,9 @@ import {
 	OpenAIModels,
 	type SupportedModels,
 } from './quick-ask.dto';
+import { ApiProperty } from '@nestjs/swagger';
 
-export class SummaryStuffDTO {
+export class SummarizeDTO {
 	/**
 	 * The model provider to use for the query.
 	 */
@@ -50,4 +50,14 @@ export class SummaryStuffDTO {
 		maximum: 1,
 	})
 	temperature?: number;
+
+	@IsOptional()
+	@IsEnum(['map-reduce', 'stuff', 'auto'])
+	@ApiProperty({
+		description: 'The summarization algorithm to use.',
+		default: 'auto',
+		enum: ['map-reduce', 'stuff', 'auto'],
+		example: 'auto',
+	})
+	algorithm?: 'map-reduce' | 'stuff' | 'auto';
 }

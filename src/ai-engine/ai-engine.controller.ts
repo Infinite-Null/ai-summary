@@ -2,7 +2,7 @@ import { Body, Controller, Post, ValidationPipe } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AiEngineService } from './ai-engine.service';
 import { QuickAskDTO } from './dto/quick-ask.dto';
-import { SummaryStuffDTO } from './dto/summary-dto';
+import { SummarizeDTO } from './dto/summarize-dto';
 
 /**
  * Controller responsible for handling AI Engine endpoints.
@@ -29,14 +29,7 @@ export class AiEngineController {
 	}
 
 	@Post('/summarize')
-	summarize() {
-		return this.aiEngineService.mapReduceSummarization();
-	}
-
-	@Post('/summerize-stuff')
-	summerizeStuff(
-		@Body(new ValidationPipe()) summaryStuffDto: SummaryStuffDTO,
-	) {
-		return this.aiEngineService.summerizeStuff(summaryStuffDto);
+	summarize(@Body(new ValidationPipe()) summarizeDto: SummarizeDTO) {
+		return this.aiEngineService.summarize(summarizeDto);
 	}
 }
