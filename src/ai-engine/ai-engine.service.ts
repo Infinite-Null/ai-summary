@@ -257,13 +257,16 @@ export class AiEngineService {
 			['user', reduceTemplate],
 		]);
 
+		const finalPrompt = PromptTemplate.fromTemplate(this.prompt);
+
 		const response = await this.mapReduceService.summarize(
 			llm,
 			docs,
 			mapPrompt,
 			reducePrompt,
+			finalPrompt,
 		);
 
-		return { summary: response };
+		return response;
 	}
 }

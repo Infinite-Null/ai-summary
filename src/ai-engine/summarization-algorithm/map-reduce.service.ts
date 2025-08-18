@@ -1,13 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
-import { TokenTextSplitter } from 'langchain/text_splitter';
 import { Document } from '@langchain/core/documents';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { JsonOutputParser } from '@langchain/core/output_parsers';
+import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
 import { Annotation, Send, StateGraph } from '@langchain/langgraph';
+import { Injectable } from '@nestjs/common';
 import {
 	collapseDocs,
 	splitListOfDocs,
 } from 'langchain/chains/combine_documents/reduce';
+import { TokenTextSplitter } from 'langchain/text_splitter';
+import { ProjectSummarySchema } from '../types/output';
 
 interface SummaryState {
 	content: string;
@@ -20,6 +22,7 @@ const OverallState = Annotation.Root({
 	}),
 	collapsedSummaries: Annotation<Document[]>,
 	finalSummary: Annotation<string>,
+	finalSummaryObject: Annotation<ProjectSummarySchema>,
 });
 
 @Injectable()
@@ -27,17 +30,22 @@ export class MapReduceService {
 	private llm: BaseChatModel;
 	private mapPrompt: ChatPromptTemplate;
 	private reducePrompt: ChatPromptTemplate;
+	private finalPrompt: PromptTemplate;
+	private jsonOutputParser: JsonOutputParser<ProjectSummarySchema>;
 	private maxTokens: number;
 
 	private initialize(
 		llm: BaseChatModel,
 		mapPrompt: ChatPromptTemplate,
 		reducePrompt: ChatPromptTemplate,
+		finalPrompt: PromptTemplate,
 		maxTokens: number,
 	) {
 		this.llm = llm;
 		this.mapPrompt = mapPrompt;
 		this.reducePrompt = reducePrompt;
+		this.finalPrompt = finalPrompt;
+		this.jsonOutputParser = new JsonOutputParser<ProjectSummarySchema>();
 		this.maxTokens = maxTokens;
 	}
 
@@ -46,12 +54,13 @@ export class MapReduceService {
 		docs: Document[],
 		mapPrompt: ChatPromptTemplate,
 		reducePrompt: ChatPromptTemplate,
+		finalPrompt: PromptTemplate,
 		chunkSize: number = 1_000,
 		chunkOverlap: number = 0,
 		maxTokens: number = 250_000,
-	) {
+	): Promise<ProjectSummarySchema> {
 		// Initialize shared state.
-		this.initialize(llm, mapPrompt, reducePrompt, maxTokens);
+		this.initialize(llm, mapPrompt, reducePrompt, finalPrompt, maxTokens);
 
 		const textSplitter = new TokenTextSplitter({
 			chunkSize,
@@ -80,17 +89,22 @@ export class MapReduceService {
 			.addEdge('generateFinalSummary', '__end__');
 
 		const app = graph.compile();
-		let finalSummary: string | undefined = '';
+		let finalSummaryObject: ProjectSummarySchema | undefined;
 		for await (const step of await app.stream(
 			{ contents: splitDocuments.map((doc) => doc.pageContent) },
 			{ recursionLimit: 10 },
 		)) {
 			if ('generateFinalSummary' in step) {
-				finalSummary = step.generateFinalSummary?.finalSummary;
+				finalSummaryObject =
+					step.generateFinalSummary?.finalSummaryObject;
 			}
 		}
 
-		return finalSummary;
+		if (!finalSummaryObject) {
+			throw new Error('Failed to generate final summary');
+		}
+
+		return finalSummaryObject;
 	}
 
 	private async _reduce(input: Document[]): Promise<string> {
@@ -174,7 +188,23 @@ export class MapReduceService {
 	};
 
 	private generateFinalSummary = async (state: typeof OverallState.State) => {
-		const response = await this._reduce(state.collapsedSummaries);
-		return { finalSummary: response };
+		// Use the final prompt template with format instructions for structured output
+		const prompt = await this.finalPrompt.invoke({
+			context: state.collapsedSummaries,
+			format_instructions: this.jsonOutputParser.getFormatInstructions(),
+		});
+
+		const response = await this.llm.invoke(prompt);
+
+		const parsedResponse = await this.jsonOutputParser.parse(
+			typeof response.content === 'object'
+				? JSON.stringify(response.content)
+				: String(response.content),
+		);
+
+		return {
+			finalSummary: JSON.stringify(parsedResponse),
+			finalSummaryObject: parsedResponse,
+		};
 	};
 }
