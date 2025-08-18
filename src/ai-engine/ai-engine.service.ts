@@ -302,7 +302,7 @@ export class AiEngineService {
 		const generation = trace.generation({
 			name: `${provider}-${model}-generation`,
 			model: model,
-			input: { messages: prompt },
+			input: { messages: finalPrompt },
 			modelParameters: {
 				temperature: temperature || 0.7,
 			},
