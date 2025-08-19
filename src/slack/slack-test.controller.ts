@@ -15,6 +15,6 @@ export class SlackTestController {
 			'This is a temporary endpoint for testing the Slack integration',
 	})
 	async getMessages(@Body() params: FetchMessagesParams) {
-		return this.slackService.getStandup(params);
+		return this.slackService.getStandups(params);
 	}
 }

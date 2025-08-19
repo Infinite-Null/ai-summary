@@ -3,22 +3,12 @@ import { ConversationsHistoryResponse, WebClient } from '@slack/web-api';
 import {
 	FetchMessagesParams,
 	FormattedStandup,
+	ParsedStandup,
 	SlackMessage,
 	SlackUser,
 	StandupEntry,
 } from './interfaces/slack-message.interface';
 import { Channel } from '@slack/web-api/dist/types/response/ConversationsListResponse';
-
-// Define the Slack message type with the properties we need
-type SlackApiMessage = {
-	type?: string;
-	user?: string;
-	text?: string;
-	ts?: string;
-	username?: string;
-	subtype?: string;
-	thread_ts?: string;
-};
 
 @Injectable()
 export class SlackService {
@@ -154,19 +144,22 @@ export class SlackService {
 				throw new Error(`Slack API error: ${result.error}`);
 			}
 
+			const { name: username, real_name: name } = result.user || {};
+			if (!username || !name) {
+				return null;
+			}
+
 			this.logger.debug(`Fetched user info for ${userId}`);
 
 			return {
-				username: result.user?.name || '',
-				name: result.user?.real_name || '',
+				username,
+				name,
 			};
 		} catch (error) {
-			const errorMessage =
-				error instanceof Error
-					? error.message
-					: 'An unknown error occurred';
-			this.logger.error(`Failed to fetch user info: ${errorMessage}`);
-			throw error;
+			this.logger.error(
+				`Failed to fetch user info: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			);
+			return null;
 		}
 	}
 
@@ -213,19 +206,22 @@ export class SlackService {
 				if (result.messages) {
 					// Filter out the parent message (first message in thread)
 					const replies = await Promise.all(
-						result.messages
-							.slice(1)
-							.map(async (msg: SlackApiMessage) => {
-								const userInfo = msg.user
-									? await this.getUserInfo(msg.user)
-									: null;
-								return {
-									user: msg.user,
-									ts: msg.ts,
-									text: msg.text,
-									name: userInfo?.name || '',
-								};
-							}),
+						result.messages.slice(1).map(async (msg) => {
+							let name = '';
+							if (msg.user) {
+								const userInfo = await this.getUserInfo(
+									msg.user,
+								);
+								name = userInfo?.name || '';
+							}
+
+							return {
+								user: msg.user,
+								ts: msg.ts,
+								text: msg.text,
+								name,
+							};
+						}),
 					);
 
 					allReplies = [...allReplies, ...replies];
@@ -253,47 +249,74 @@ export class SlackService {
 	}
 
 	private formatStandup(
-		standupMessagesWithReplies: (SlackMessage & {
-			replies: (SlackMessage & { name?: string; user?: string })[];
-		})[],
+		standupMessagesWithReplies: Array<
+			SlackMessage & { replies?: SlackMessage[] }
+		>,
 	): FormattedStandup {
 		const formatted: FormattedStandup = {};
 
 		for (const message of standupMessagesWithReplies) {
-			if (!message.ts || !message.replies?.length) continue;
-
-			// Convert Unix timestamp to ISO string
-			const timestamp = new Date(Number(message.ts) * 1000).toISOString();
-
-			// Initialize array for this timestamp
-			if (!formatted[timestamp]) {
-				formatted[timestamp] = [];
+			if (!message.ts || !message.replies?.length) {
+				continue;
 			}
 
-			// Process each reply in the thread
-			for (const reply of message.replies) {
-				if (!reply.text || !reply.name || !reply.user) continue;
+			const timestamp = new Date(Number(message.ts) * 1000).toISOString();
+			const validEntries: StandupEntry[] = [];
 
-				const entry: StandupEntry = {
+			for (const reply of message.replies) {
+				if (!reply.text || !reply.name || !reply.user) {
+					continue;
+				}
+
+				validEntries.push({
 					name: reply.name,
 					user: reply.user,
-					standup: reply.text,
-				};
-
-				formatted[timestamp].push(entry);
+					standup: this.parseStandup(reply.text),
+				});
 			}
 
-			// Remove empty arrays
-			if (formatted[timestamp].length === 0) {
-				delete formatted[timestamp];
+			if (validEntries.length > 0) {
+				formatted[timestamp] = validEntries;
 			}
 		}
 
 		return formatted;
 	}
 
-	async getStandup(params: FetchMessagesParams): Promise<FormattedStandup> {
+	parseStandup(standup: string): ParsedStandup {
+		try {
+			// Split the text by the known question strings
+			const yesterdayMatch = standup.match(
+				/What did you accomplish on the previous working day\?\*\n(.*?)(?=\*What are you working on today\?\*)/s,
+			);
+			const todayMatch = standup.match(
+				/What are you working on today\?\*\n(.*?)(?=\*Mention any blockers)/s,
+			);
+			const blockersMatch = standup.match(
+				/Mention any blockers.*\n(.*?)$/s,
+			);
+
+			// Extract and clean up the content
+			return {
+				yesterday: yesterdayMatch?.[1]?.trim() || '',
+				today: todayMatch?.[1]?.trim() || '',
+				blocker: blockersMatch?.[1]?.trim() || '',
+				text: standup.trim(),
+			};
+		} catch (error) {
+			this.logger.warn('Failed to parse standup text:', error);
+			return {
+				yesterday: '',
+				today: '',
+				blocker: '',
+				text: '',
+			};
+		}
+	}
+
+	async getStandups(params: FetchMessagesParams): Promise<FormattedStandup> {
 		const channelId = await this.getChannelId(params.channelName);
+
 		const messages = await this.getMessages(
 			channelId,
 			params.startDate,
@@ -301,11 +324,9 @@ export class SlackService {
 		);
 
 		const standupMessages = this.extractStandupMessages(messages);
-		const standupMessagesWithReplies: (SlackMessage & {
-			replies: (SlackMessage & { name?: string })[];
-		})[] = [];
 
-		// Loop through messages and fetch replies and append them
+		const standupMessagesWithReplies: Array<SlackMessage> = [];
+
 		for (const message of standupMessages) {
 			if (message.ts) {
 				const replies = await this.getMessageReplies(

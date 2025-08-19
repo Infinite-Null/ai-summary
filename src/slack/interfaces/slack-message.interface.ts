@@ -4,32 +4,31 @@ export interface FetchMessagesParams {
 	endDate: string;
 }
 
-export interface SlackReply {
-	text: string;
-	timestamp: string;
-	user: string;
-}
-
 export interface SlackMessage {
 	username?: string;
 	subtype?: string;
 	ts?: string;
 	text?: string;
-}
-
-export interface SlackMessageResponse {
-	messages: SlackMessage[];
+	user?: string;
+	name?: string;
+	replies?: SlackMessage[];
 }
 
 export interface SlackUser {
 	username: string;
 	name: string;
-	title?: string;
+}
+
+export interface ParsedStandup {
+	yesterday: string;
+	today: string;
+	blocker: string;
+	text: string;
 }
 
 export interface StandupEntry {
 	name: string;
-	standup: string;
+	standup: ParsedStandup;
 	user: string;
 }
 
