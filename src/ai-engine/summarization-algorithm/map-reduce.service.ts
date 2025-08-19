@@ -1,16 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
 import {
 	RecursiveCharacterTextSplitter,
 	TokenTextSplitter,
 } from 'langchain/text_splitter';
 import { Document } from '@langchain/core/documents';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { JsonOutputParser } from '@langchain/core/output_parsers';
+import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
 import { Annotation, Send, StateGraph } from '@langchain/langgraph';
 import {
 	collapseDocs,
 	splitListOfDocs,
 } from 'langchain/chains/combine_documents/reduce';
+import { LangfuseTraceClient } from 'langfuse';
+import { ProjectSummarySchema } from '../types/output';
 
 interface SummaryState {
 	content: string;
@@ -23,6 +26,7 @@ const OverallState = Annotation.Root({
 	}),
 	collapsedSummaries: Annotation<Document[]>,
 	finalSummary: Annotation<string>,
+	finalSummaryObject: Annotation<ProjectSummarySchema>,
 });
 
 @Injectable()
@@ -54,16 +58,38 @@ export class MapReduceService {
 	 */
 	private maxTokens: number;
 
+	private finalPrompt: PromptTemplate;
+	private jsonOutputParser: JsonOutputParser<ProjectSummarySchema>;
+
+	private trace: LangfuseTraceClient;
+	private provider: string = 'openai';
+	private model: string = 'gpt-3.5-turbo';
+	private temperature: number = 0.7;
+	private totalTokens: number = 0;
+
 	private initialize(
 		llm: BaseChatModel,
 		mapPrompt: ChatPromptTemplate,
 		reducePrompt: ChatPromptTemplate,
+		finalPrompt: PromptTemplate,
 		maxTokens: number,
+		trace: LangfuseTraceClient,
+		provider: string = 'openai',
+		model: string = 'gpt-3.5-turbo',
+		temperature: number = 0.7,
+		totalTokens: number = 0,
 	) {
 		this.llm = llm;
 		this.mapPrompt = mapPrompt;
 		this.reducePrompt = reducePrompt;
+		this.finalPrompt = finalPrompt;
+		this.jsonOutputParser = new JsonOutputParser<ProjectSummarySchema>();
 		this.maxTokens = maxTokens;
+		this.trace = trace;
+		this.provider = provider;
+		this.model = model;
+		this.temperature = temperature;
+		this.totalTokens = totalTokens;
 	}
 
 	/**
@@ -87,17 +113,34 @@ export class MapReduceService {
 		docs: Document[],
 		mapPrompt: ChatPromptTemplate,
 		reducePrompt: ChatPromptTemplate,
+		finalPrompt: PromptTemplate,
+		trace: LangfuseTraceClient,
+		provider: string = 'openai',
+		model: string = 'gpt-3.5-turbo',
+		temperature: number = 0.7,
+		totalTokens: number = 0,
 		chunkSize: number = 1_500,
 		chunkOverlap: number = 0,
 		maxTokens: number = 128_000,
-	) {
+	): Promise<ProjectSummarySchema> {
 		/**
 		 * Initializes shared state.
 		 *
 		 * @todo Currently, there's no way of determining maxTokens based on the model (in langchain), 128k is a
 		 * decent default for most models. We should ideally determine this based on the model's token limit.
 		 */
-		this.initialize(llm, mapPrompt, reducePrompt, maxTokens);
+		this.initialize(
+			llm,
+			mapPrompt,
+			reducePrompt,
+			finalPrompt,
+			maxTokens,
+			trace,
+			provider,
+			model,
+			temperature,
+			totalTokens,
+		);
 
 		let splitDocuments: Document[] = [];
 		try {
@@ -142,17 +185,22 @@ export class MapReduceService {
 			.addEdge('generateFinalSummary', '__end__');
 
 		const app = graph.compile();
-		let finalSummary: string | undefined = '';
+		let finalSummaryObject: ProjectSummarySchema | undefined;
 		for await (const step of await app.stream(
 			{ contents: splitDocuments.map((doc) => doc.pageContent) },
 			{ recursionLimit: 10 },
 		)) {
 			if ('generateFinalSummary' in step) {
-				finalSummary = step.generateFinalSummary?.finalSummary;
+				finalSummaryObject =
+					step.generateFinalSummary?.finalSummaryObject;
 			}
 		}
 
-		return finalSummary;
+		if (!finalSummaryObject) {
+			throw new Error('Failed to generate final summary');
+		}
+
+		return finalSummaryObject;
 	}
 
 	private async _reduce(input: Document[]): Promise<string> {
@@ -197,7 +245,23 @@ export class MapReduceService {
 
 	private generateSummary = async (state: SummaryState) => {
 		const prompt = await this.mapPrompt.invoke({ context: state.content });
+
+		const generation = this.trace.generation({
+			name: `${this.provider}-${this.model}-generation`,
+			model: this.model,
+			input: { messages: prompt },
+			modelParameters: {
+				temperature: this.temperature || 0.7,
+			},
+			metadata: {
+				totalTokens: this.totalTokens,
+				algorithm: 'stuff',
+			},
+		});
+
 		const response = await this.llm.invoke(prompt);
+
+		generation.end({ output: response.content });
 
 		return {
 			summaries: [
@@ -236,7 +300,23 @@ export class MapReduceService {
 	};
 
 	private generateFinalSummary = async (state: typeof OverallState.State) => {
-		const response = await this._reduce(state.collapsedSummaries);
-		return { finalSummary: response };
+		// Use the final prompt template with format instructions for structured output
+		const prompt = await this.finalPrompt.invoke({
+			context: state.collapsedSummaries,
+			format_instructions: this.jsonOutputParser.getFormatInstructions(),
+		});
+
+		const response = await this.llm.invoke(prompt);
+
+		const parsedResponse = await this.jsonOutputParser.parse(
+			typeof response.content === 'object'
+				? JSON.stringify(response.content)
+				: String(response.content),
+		);
+
+		return {
+			finalSummary: JSON.stringify(parsedResponse),
+			finalSummaryObject: parsedResponse,
+		};
 	};
 }
