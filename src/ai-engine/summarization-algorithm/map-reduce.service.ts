@@ -103,9 +103,9 @@ export class MapReduceService {
 	 * @param docs - The documents to summarize.
 	 * @param mapPrompt - The prompt template for the map step.
 	 * @param reducePrompt - The prompt template for the reduce step.
-	 * @param chunkSize - The size of each chunk for splitting documents. (default: 25,000)
+	 * @param chunkSize - The size of each chunk for splitting documents. (default: 20,000)
 	 * @param chunkOverlap - The overlap size between chunks. (default: 0)
-	 * @param maxTokens - The maximum number of tokens allowed for summarization. (default: 250,000)
+	 * @param maxTokens - The maximum number of tokens allowed for summarization. (default: 90,000)
 	 * @returns The final summary as a string.
 	 */
 	async summarize(
@@ -119,9 +119,9 @@ export class MapReduceService {
 		model: string = 'gpt-3.5-turbo',
 		temperature: number = 0.7,
 		totalTokens: number = 0,
-		chunkSize: number = 1_500,
+		chunkSize: number = 20_000,
 		chunkOverlap: number = 0,
-		maxTokens: number = 128_000,
+		maxTokens: number = 90_000,
 	): Promise<ProjectSummarySchema> {
 		/**
 		 * Initializes shared state.

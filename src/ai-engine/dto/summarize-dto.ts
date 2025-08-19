@@ -28,9 +28,9 @@ export class SummarizeDTO {
 	@IsEnum({ ...OpenAIModels, ...GoogleModels })
 	@ApiProperty({
 		description: 'The specific model to use for the query.',
-		default: OpenAIModels.GPT_3_5_TURBO,
+		default: OpenAIModels.GPT_4o_MINI,
 		enum: [OpenAIModels, GoogleModels],
-		example: OpenAIModels.GPT_3_5_TURBO,
+		example: OpenAIModels.GPT_4o_MINI,
 	})
 	model?: SupportedModels;
 
