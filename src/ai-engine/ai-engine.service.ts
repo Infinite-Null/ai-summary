@@ -45,28 +45,48 @@ export class AiEngineService {
 	/**
 	 * Prompt template for project performance report generation.
 	 */
-	private readonly prompt: string = `Using the context below, analyze the project data and create a structured project performance report.
-                
-                You must respond with a JSON object that strictly follows this format:
+	private readonly prompt: string = `You are a project management analyst. Analyze the provided team standup data and create a precise project performance report.
+
+                CRITICAL INSTRUCTIONS:
+                1. ONLY include information explicitly mentioned in the context
+                2. Do NOT infer or assume dates - use only dates found in the data or mark as "Not specified"
+                3. Carefully distinguish between completed, in-progress, and review tasks based on explicit status indicators
+                4. Be specific with task descriptions and include relevant PR/issue numbers when mentioned
+                5. IMPORTANT: Ensure all text in JSON is properly escaped. Replace quotes with single quotes or escape them properly.
+
+                You must respond with a valid JSON object that strictly follows this format:
                 {{
-                    "projectName": "Name of the project",
-                    "from": "Start date in format YYYY-MM-DD",
-                    "to": "End date in format YYYY-MM-DD", 
-                    "projectStatus": "Green, Amber, or Red based on project progress",
-                    "riskBlockersActionsNeeded": "List critical items the client needs to be aware of - timeline changes, scope changes, access blocks, information/approval blocks, etc. List in most critical to least critical order. If no risks or blockers, indicate 'No critical risks or blockers identified.' Tag team member names who need to action items from the client.",
+                    "projectName": "Extract the actual project name from the context",
+                    "from": "Start date in YYYY-MM-DD format if explicitly mentioned, otherwise Not specified",
+                    "to": "End date in YYYY-MM-DD format if explicitly mentioned, otherwise Not specified", 
+                    "projectStatus": "Green or Amber or Red based on project progress",
+                    "riskBlockersActionsNeeded": "List ONLY explicitly mentioned blockers, risks, or issues requiring action. If everyone reports None for blockers, state No explicit blockers reported by team members.",
                     "taskDetails": {{
-                        "completed": "List of completed tasks and achievements",
-                        "inProgress": "Tasks currently being worked on",
-                        "inReview": "Tasks that are completed but pending review or approval"
-			        }}
+                        "completed": ["Array of specific completed tasks with details. Look for keywords: completed, merged, finished, done, accomplished. Include PR numbers and issue references."],
+                        "inProgress": ["Array of tasks currently being worked on. Look for keywords: working on, continue, investigating, implementing. Include current status and next steps."],
+                        "inReview": ["Array of tasks pending review/approval. Look for keywords: ready for review, pending review, waiting for approval, submitted for review."]
+                    }}
                 }}
 
-                Guidelines:
-                - ProjectName: Extract or infer the project name from the context
-                - Dates: Use the reporting period dates or infer appropriate date ranges
-                - Project_Status: Analyze progress and assign Green (on track), Amber (some concerns), or Red (significant issues)
-                - Risk_Blockers_Actions_Needed: Focus on actionable items requiring client attention
-                - Task Details: Categorize work items appropriately
+                TASK CATEGORIZATION RULES:
+                - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
+                - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
+                - In Review: Tasks explicitly mentioned as ready for review, pending approval, or awaiting feedback
+
+                STATUS DETERMINATION:
+                - Green: No major issues reported, tasks progressing as expected
+                - Amber: Some delays, minor issues, or concerns mentioned by team members
+                - Red: Critical blockers, failed tasks, or significant issues reported
+
+                JSON FORMATTING RULES:
+                - Use only double quotes for JSON keys and string values
+                - Escape any double quotes within string values using backslash
+                - Do not include line breaks within string values
+                - Keep task descriptions concise and clear
+                - Include specific GitHub PR/issue numbers when mentioned
+                - If data spans multiple time periods, note this in the date fields
+                - No need to mention name of person responsible for tasks, just add the concise task description
+                - Paraphrase information as needed for clarity and conciseness for the client
 
                 Context:
                 {context}
@@ -262,7 +282,16 @@ export class AiEngineService {
 		this.logger.log('Running map-reduce summarization algorithm');
 
 		const mapPrompt = ChatPromptTemplate.fromMessages([
-			['user', 'Write a concise summary of the following: \n\n{context}'],
+			[
+				'user',
+				`Write a concise summary of the following with task categorization
+				\n\nRULES:
+                - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
+                - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
+                - In Review: Tasks explicitly mentioned as ready for review, pending approval, or awaiting feedback
+				- Any Blockers: Tasks that are blocked by external factors, dependencies, or waiting on input
+				\n\n{context}`,
+			],
 		]);
 
 		const reduceTemplate = `
