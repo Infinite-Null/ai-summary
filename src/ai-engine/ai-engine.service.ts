@@ -5,11 +5,8 @@ import {
 	SystemMessage,
 } from '@langchain/core/messages';
 import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
-import {
-	ChatGoogleGenerativeAI,
-	GoogleGenerativeAIEmbeddings,
-} from '@langchain/google-genai';
-import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { Document } from 'langchain/document';
@@ -117,30 +114,6 @@ export class AiEngineService {
 		return new ChatOpenAI({ model, temperature });
 	}
 
-	createEmbeddingInstance(
-		provider: ModelProvider = ModelProvider.OPENAI,
-		model: SupportedModels = OpenAIModels.GPT_3_5_TURBO,
-	): OpenAIEmbeddings | GoogleGenerativeAIEmbeddings {
-		if (!this.validateModel(provider, model)) {
-			throw new BadRequestException(
-				`Unsupported model ${model} for provider ${provider}.`,
-			);
-		}
-
-		if (provider === ModelProvider.GOOGLE) {
-			return new GoogleGenerativeAIEmbeddings({
-				apiKey: process.env.GOOGLE_API_KEY,
-				model: 'embedding-001',
-			});
-		}
-
-		// Fallback to the default provider (OpenAI).
-		return new OpenAIEmbeddings({
-			apiKey: process.env.OPENAI_API_KEY,
-			model: 'text-embedding-ada-002',
-		});
-	}
-
 	validateModel(provider: ModelProvider, model: SupportedModels): boolean {
 		if (provider === ModelProvider.OPENAI) {
 			return Object.values(OpenAIModels).includes(model as OpenAIModels);
@@ -203,6 +176,12 @@ export class AiEngineService {
 		return response;
 	}
 
+	/**
+	 * Summarizes a document using the specified model and algorithm.
+	 *
+	 * @param summarizeDto - The DTO containing the summarization parameters.
+	 * @returns A summary of the document.
+	 */
 	async summarize({ provider, model, temperature, algorithm }: SummarizeDTO) {
 		const trace = this.langfuse.trace({
 			name: `ai-poc-${algorithm}-summarization`,

@@ -1,14 +1,17 @@
+import { Injectable, Logger } from '@nestjs/common';
+import {
+	RecursiveCharacterTextSplitter,
+	TokenTextSplitter,
+} from 'langchain/text_splitter';
 import { Document } from '@langchain/core/documents';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { JsonOutputParser } from '@langchain/core/output_parsers';
 import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
 import { Annotation, Send, StateGraph } from '@langchain/langgraph';
-import { Injectable } from '@nestjs/common';
 import {
 	collapseDocs,
 	splitListOfDocs,
 } from 'langchain/chains/combine_documents/reduce';
-import { TokenTextSplitter } from 'langchain/text_splitter';
 import { LangfuseTraceClient } from 'langfuse';
 import { ProjectSummarySchema } from '../types/output';
 
@@ -28,12 +31,36 @@ const OverallState = Annotation.Root({
 
 @Injectable()
 export class MapReduceService {
+	/**
+	 * Logger instance for the AI Engine service.
+	 */
+	private readonly logger = new Logger(MapReduceService.name, {
+		timestamp: true,
+	});
+
+	/**
+	 * The language model used for summarization.
+	 */
 	private llm: BaseChatModel;
+
+	/**
+	 * Prompt for the map step in the MapReduce algorithm.
+	 */
 	private mapPrompt: ChatPromptTemplate;
+
+	/**
+	 * Prompt for the reduce step in the MapReduce algorithm.
+	 */
 	private reducePrompt: ChatPromptTemplate;
+
+	/**
+	 * Maximum number of tokens allowed for summarization.
+	 */
+	private maxTokens: number;
+
 	private finalPrompt: PromptTemplate;
 	private jsonOutputParser: JsonOutputParser<ProjectSummarySchema>;
-	private maxTokens: number;
+
 	private trace: LangfuseTraceClient;
 	private provider: string = 'openai';
 	private model: string = 'gpt-3.5-turbo';
@@ -65,6 +92,22 @@ export class MapReduceService {
 		this.totalTokens = totalTokens;
 	}
 
+	/**
+	 * Summarizes a list of documents using the MapReduce algorithm. We use a higher chunk size
+	 * to ensure that the sub-documents are large enough for the model to process effectively.
+	 *
+	 * The overlap is set to 0 to avoid redundancy in the chunks while summarizing, as the
+	 * reduction step will combine adjacent chunks any way.
+	 *
+	 * @param llm - The language model to use for summarization.
+	 * @param docs - The documents to summarize.
+	 * @param mapPrompt - The prompt template for the map step.
+	 * @param reducePrompt - The prompt template for the reduce step.
+	 * @param chunkSize - The size of each chunk for splitting documents. (default: 20,000)
+	 * @param chunkOverlap - The overlap size between chunks. (default: 0)
+	 * @param maxTokens - The maximum number of tokens allowed for summarization. (default: 90,000)
+	 * @returns The final summary as a string.
+	 */
 	async summarize(
 		llm: BaseChatModel,
 		docs: Document[],
@@ -76,11 +119,16 @@ export class MapReduceService {
 		model: string = 'gpt-3.5-turbo',
 		temperature: number = 0.7,
 		totalTokens: number = 0,
-		chunkSize: number = 1_000,
+		chunkSize: number = 20_000,
 		chunkOverlap: number = 0,
-		maxTokens: number = 250_000,
+		maxTokens: number = 90_000,
 	): Promise<ProjectSummarySchema> {
-		// Initialize shared state.
+		/**
+		 * Initializes shared state.
+		 *
+		 * @todo Currently, there's no way of determining maxTokens based on the model (in langchain), 128k is a
+		 * decent default for most models. We should ideally determine this based on the model's token limit.
+		 */
 		this.initialize(
 			llm,
 			mapPrompt,
@@ -94,12 +142,28 @@ export class MapReduceService {
 			totalTokens,
 		);
 
-		const textSplitter = new TokenTextSplitter({
-			chunkSize,
-			chunkOverlap,
-		});
+		let splitDocuments: Document[] = [];
+		try {
+			const textSplitter = new TokenTextSplitter({
+				chunkSize,
+				chunkOverlap,
+				encodingName: 'cl100k_base',
+			});
 
-		const splitDocuments = await textSplitter.splitDocuments(docs);
+			splitDocuments = await textSplitter.splitDocuments(docs);
+		} catch (error) {
+			this.logger.error(
+				'Error splitting documents with TokenTextSplitter falling back to RecursiveCharacterTextSplitter',
+				error,
+			);
+
+			const textSplitter = new RecursiveCharacterTextSplitter({
+				chunkSize,
+				chunkOverlap,
+			});
+
+			splitDocuments = await textSplitter.splitDocuments(docs);
+		}
 
 		const graph = new StateGraph(OverallState)
 			.addNode('generateSummary', this.generateSummary)
