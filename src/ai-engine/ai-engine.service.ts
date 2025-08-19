@@ -45,48 +45,46 @@ export class AiEngineService {
 	/**
 	 * Prompt template for project performance report generation.
 	 */
-	private readonly prompt: string = `You are a project management analyst. Analyze the provided team standup data and create a precise project performance report.
+	private readonly prompt: string = `You are a project management analyst. Analyze the provided team standup data and create a comprehensive project summary report.
 
                 CRITICAL INSTRUCTIONS:
                 1. ONLY include information explicitly mentioned in the context
-                2. Do NOT infer or assume dates - use only dates found in the data or mark as "Not specified"
-                3. Carefully distinguish between completed, in-progress, and review tasks based on explicit status indicators
-                4. Be specific with task descriptions and include relevant PR/issue numbers when mentioned
-                5. IMPORTANT: Ensure all text in JSON is properly escaped. Replace quotes with single quotes or escape them properly.
+                2. Create a comprehensive narrative summary of the project progress
+                3. Categorize tasks into completed and in-progress with detailed descriptions
+                4. Identify risks, blockers, and actions needed based on the provided data
+                5. Format task details with main issue titles followed by bullet points of specific actions
 
                 You must respond with a valid JSON object that strictly follows this format:
                 {{
-                    "projectName": "Extract the actual project name from the context",
-                    "from": "Start date in YYYY-MM-DD format if explicitly mentioned, otherwise Not specified",
-                    "to": "End date in YYYY-MM-DD format if explicitly mentioned, otherwise Not specified", 
-                    "projectStatus": "Green or Amber or Red based on project progress",
-                    "riskBlockersActionsNeeded": "List ONLY explicitly mentioned blockers, risks, or issues requiring action. If everyone reports None for blockers, state No explicit blockers reported by team members.",
-                    "taskDetails": {{
-                        "completed": ["Array of specific completed tasks with details. Look for keywords: completed, merged, finished, done, accomplished. Include PR numbers and issue references."],
-                        "inProgress": ["Array of tasks currently being worked on. Look for keywords: working on, continue, investigating, implementing. Include current status and next steps."],
-                        "inReview": ["Array of tasks pending review/approval. Look for keywords: ready for review, pending review, waiting for approval, submitted for review."]
+                    "summary": "A comprehensive narrative summary of the project's current state, key accomplishments, and overall progress. This should be 3-4 paragraphs providing a complete overview of where the project stands, what has been achieved, and what is currently happening. Include specific details about deliverables, milestones, and current focus areas.",
+                    "risk_Blocker_Action_Needed": "Detailed description of any risks, blockers, or critical actions that need immediate attention. If there are no explicit blockers mentioned, state 'No explicit blockers reported by team members.' Include specific action items, dependencies, and any issues that could impact project timeline or success.",
+                    "task_details": {{
+                        "completed": "Format as: 'Main Issue Title: Brief description of the completed work.
+						- Specific action item completed - Another specific action item completed 
+						- Additional completed task details'. 
+						Repeat this format for each major completed area. Include PR numbers, issue references, and specific achievements.",
+                        "inProgress": "Format as: 'Main Issue Title: Brief description of ongoing work. 
+						- Current task being worked on 
+						- Another ongoing task 
+						- Status of current work'. 
+						Repeat this format for each major in-progress area. Include current status, next steps, and any dependencies."
                     }}
                 }}
 
-                TASK CATEGORIZATION RULES:
-                - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
-                - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
-                - In Review: Tasks explicitly mentioned as ready for review, pending approval, or awaiting feedback
+                CONTENT GUIDELINES:
+                - Summary: Should read like a professional project status report narrative
+                - Risk/Blockers: Focus on actionable items that need attention or resolution
+                - Completed Tasks: Group related completed work under descriptive main titles
+                - In-Progress Tasks: Group ongoing work under descriptive main titles with current status
 
-                STATUS DETERMINATION:
-                - Green: No major issues reported, tasks progressing as expected
-                - Amber: Some delays, minor issues, or concerns mentioned by team members
-                - Red: Critical blockers, failed tasks, or significant issues reported
-
-                JSON FORMATTING RULES:
+                FORMATTING RULES:
                 - Use only double quotes for JSON keys and string values
                 - Escape any double quotes within string values using backslash
-                - Do not include line breaks within string values
-                - Keep task descriptions concise and clear
-                - Include specific GitHub PR/issue numbers when mentioned
-                - If data spans multiple time periods, note this in the date fields
-                - No need to mention name of person responsible for tasks, just add the concise task description
-                - Paraphrase information as needed for clarity and conciseness for the client
+                - Keep descriptions clear and professional
+                - Include specific details like PR numbers, dates, and technical specifics when mentioned
+                - Use bullet points (-) for individual task items within each main category
+                - Each main issue title should be followed by a colon and brief description
+                - Maintain professional tone throughout
 
                 Context:
                 {context}
@@ -284,11 +282,13 @@ export class AiEngineService {
 		const mapPrompt = ChatPromptTemplate.fromMessages([
 			[
 				'user',
-				`Write a concise summary of the following with task categorization
+				`Write a concise summary of the following with task categorization focusing on project progress and achievements:
 				\n\nRULES:
                 - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
                 - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
-                - In Review: Tasks explicitly mentioned as ready for review, pending approval, or awaiting feedback
+                - Identify main project areas and group related tasks under descriptive titles
+                - Include specific details like PR numbers, technical specifics, and accomplishments
+                - Focus on project deliverables, milestones, and current work status
 				- Any Blockers: Tasks that are blocked by external factors, dependencies, or waiting on input
 				\n\n{context}`,
 			],
