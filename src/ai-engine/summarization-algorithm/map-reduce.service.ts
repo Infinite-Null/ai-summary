@@ -1,17 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
-import {
-	RecursiveCharacterTextSplitter,
-	TokenTextSplitter,
-} from 'langchain/text_splitter';
 import { Document } from '@langchain/core/documents';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { JsonOutputParser } from '@langchain/core/output_parsers';
 import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
 import { Annotation, Send, StateGraph } from '@langchain/langgraph';
+import { Injectable, Logger } from '@nestjs/common';
 import {
 	collapseDocs,
 	splitListOfDocs,
 } from 'langchain/chains/combine_documents/reduce';
+import {
+	RecursiveCharacterTextSplitter,
+	TokenTextSplitter,
+} from 'langchain/text_splitter';
 import { LangfuseTraceClient } from 'langfuse';
 import { ProjectSummarySchema } from '../types/output';
 
@@ -255,7 +255,7 @@ export class MapReduceService {
 			},
 			metadata: {
 				totalTokens: this.totalTokens,
-				algorithm: 'stuff',
+				algorithm: 'map-reduce',
 			},
 		});
 
