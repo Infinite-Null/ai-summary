@@ -7,7 +7,7 @@ import {
 	SlackMessage,
 	SlackUser,
 	StandupEntry,
-} from './interfaces/slack-message.interface';
+} from './types';
 import { Channel } from '@slack/web-api/dist/types/response/ConversationsListResponse';
 
 @Injectable()

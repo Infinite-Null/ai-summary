@@ -1,6 +1,6 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { SlackService } from './slack.service';
-import type { FetchMessagesParams } from './interfaces/slack-message.interface';
+import type { FetchMessagesParams } from './types';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Slack - Testing')
