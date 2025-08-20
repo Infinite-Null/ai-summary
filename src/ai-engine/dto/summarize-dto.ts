@@ -60,4 +60,28 @@ export class SummarizeDTO {
 		example: 'auto',
 	})
 	algorithm?: 'map-reduce' | 'stuff' | 'auto';
+
+	@IsOptional()
+	@ApiProperty({
+		description: 'The name of the Slack channel to fetch messages from.',
+		default: 'proj-ai-internal',
+		example: 'proj-ai-internal',
+	})
+	channelName?: string = 'proj-ai-internal';
+
+	@IsOptional()
+	@ApiProperty({
+		description: 'The start date for fetching messages (ISO format).',
+		default: '2025-08-18T01:30:04.549Z',
+		example: '2025-08-18T01:30:04.549Z',
+	})
+	startDate?: string = '2025-08-18T01:30:04.549Z';
+
+	@IsOptional()
+	@ApiProperty({
+		description: 'The end date for fetching messages (ISO format).',
+		default: '2025-08-18T17:30:04.549Z',
+		example: '2025-08-18T17:30:04.549Z',
+	})
+	endDate?: string = '2025-08-18T17:30:04.549Z';
 }
