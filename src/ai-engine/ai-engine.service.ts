@@ -8,7 +8,6 @@ import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { readFileSync } from 'fs';
 import { Document } from 'langchain/document';
 import { Langfuse } from 'langfuse';
 import {
@@ -22,6 +21,7 @@ import { SummarizeDTO } from './dto/summarize-dto';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
+import { SlackService } from 'src/slack/slack.service';
 
 @Injectable()
 export class AiEngineService {
@@ -87,6 +87,7 @@ Context:
 	constructor(
 		private readonly mapReduceService: MapReduceService,
 		private readonly stuffService: StuffService,
+		private readonly slackService: SlackService,
 	) {
 		this.langfuse = new Langfuse({
 			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
@@ -193,7 +194,15 @@ Context:
 	 * @param summarizeDto - The DTO containing the summarization parameters.
 	 * @returns A summary of the document.
 	 */
-	async summarize({ provider, model, temperature, algorithm }: SummarizeDTO) {
+	async summarize({
+		provider,
+		model,
+		temperature,
+		algorithm,
+		channelName,
+		startDate,
+		endDate,
+	}: SummarizeDTO) {
 		const trace = this.langfuse.trace({
 			name: `ai-poc-${algorithm}-summarization`,
 			metadata: {
@@ -205,8 +214,13 @@ Context:
 
 		const llm = this.createModelInstance(provider, model, temperature);
 
-		// TODO: Implement data ingestion from API responses as tool execution and remove this line.
-		const fileData = readFileSync('./dataset.txt', 'utf-8');
+		const standupData = await this.slackService.getStandups({
+			channelName: channelName || 'proj-ai-internal',
+			startDate: startDate || '2025-08-18T01:30:04.549Z',
+			endDate: endDate || '2025-08-18T17:30:04.549Z',
+		});
+
+		const fileData = JSON.stringify(standupData, null, 2);
 
 		/**
 		 * TODO: It's best to use a single document to store the data pertaining to a
