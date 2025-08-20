@@ -47,49 +47,42 @@ export class AiEngineService {
 	 */
 	private readonly prompt: string = `You are a project management analyst. Analyze the provided team standup data and create a comprehensive project summary report.
 
-                CRITICAL INSTRUCTIONS:
-                1. ONLY include information explicitly mentioned in the context
-                2. Create a comprehensive narrative summary of the project progress
-                3. Categorize tasks into completed and in-progress with detailed descriptions
-                4. Identify risks, blockers, and actions needed based on the provided data
-                5. Format task details with main issue titles followed by bullet points of specific actions
+CRITICAL INSTRUCTIONS:
+1. ONLY include information explicitly mentioned in the context
+2. Create a comprehensive narrative summary of the project progress
+3. Categorize tasks into completed and in-progress with detailed descriptions
+4. Identify risks, blockers, and actions needed based on the provided data
+5. Format task details with main issue titles followed by bullet points of specific actions
 
-                You must respond with a valid JSON object that strictly follows this format:
-                {{
-                    "summary": "A comprehensive narrative summary of the project's current state, key accomplishments, and overall progress. This should be 3-4 paragraphs providing a complete overview of where the project stands, what has been achieved, and what is currently happening. Include specific details about deliverables, milestones, and current focus areas.",
-                    "risk_Blocker_Action_Needed": "Detailed description of any risks, blockers, or critical actions that need immediate attention. If there are no explicit blockers mentioned, state 'No explicit blockers reported by team members.' Include specific action items, dependencies, and any issues that could impact project timeline or success.",
-                    "task_details": {{
-                        "completed": "Format as: 'Main Issue Title: Brief description of the completed work.
-						- Specific action item completed - Another specific action item completed 
-						- Additional completed task details'. 
-						Repeat this format for each major completed area. Include PR numbers, issue references, and specific achievements.",
-                        "inProgress": "Format as: 'Main Issue Title: Brief description of ongoing work. 
-						- Current task being worked on 
-						- Another ongoing task 
-						- Status of current work'. 
-						Repeat this format for each major in-progress area. Include current status, next steps, and any dependencies."
-                    }}
-                }}
+You must respond with a valid JSON object that strictly follows this format:
+{{
+    "summary": "A comprehensive narrative summary of the project's current state, key accomplishments, and overall progress. This should be 3-4 paragraphs providing a complete overview of where the project stands, what has been achieved, and what is currently happening. Include specific details about deliverables, milestones, and current focus areas.",
+    "risk_Blocker_Action_Needed": "Detailed description of any risks, blockers, or critical actions that need immediate attention. If there are no explicit blockers mentioned, state 'No explicit blockers reported.' Include specific action items, dependencies, and any issues that could impact project timeline or success.",
+    "task_details": {{
+        "completed": "Format as: Main Issue Title: Brief description of the completed work. Use bullet points for specific items: - Specific action item completed - Another specific action item completed - Additional completed task details. Repeat this format for each major completed area. Include PR numbers, issue references, and specific achievements.",
+        "inProgress": "Format as: Main Issue Title: Brief description of ongoing work. Use bullet points for specific items: - Current task being worked on - Another ongoing task - Status of current work. Repeat this format for each major in-progress area. Include current status, next steps, and any dependencies."
+    }}
+}}
 
-                CONTENT GUIDELINES:
-                - Summary: Should read like a professional project status report narrative
-                - Risk/Blockers: Focus on actionable items that need attention or resolution
-                - Completed Tasks: Group related completed work under descriptive main titles
-                - In-Progress Tasks: Group ongoing work under descriptive main titles with current status
+CONTENT GUIDELINES:
+- Summary: Should read like a professional project status report narrative
+- Risk/Blockers: Focus on actionable items that need attention or resolution
+- Completed Tasks: Group related completed work under descriptive main titles
+- In-Progress Tasks: Group ongoing work under descriptive main titles with current status
 
-                FORMATTING RULES:
-                - Use only double quotes for JSON keys and string values
-                - Escape any double quotes within string values using backslash
-                - Keep descriptions clear and professional
-                - Include specific details like PR numbers, dates, and technical specifics when mentioned
-                - Use bullet points (-) for individual task items within each main category
-                - Each main issue title should be followed by a colon and brief description
-                - Maintain professional tone throughout
+FORMATTING RULES:
+- Use only double quotes for JSON keys and string values
+- Escape any double quotes within string values using backslash
+- Keep descriptions clear and professional
+- Include specific details like PR numbers, dates, and technical specifics when mentioned
+- Use bullet points (-) for individual task items within each main category
+- Each main issue title should be followed by a colon and brief description
+- Maintain professional tone throughout
 
-                Context:
-                {context}
+Context:
+{context}
 
-                {format_instructions}`;
+{format_instructions}`;
 
 	constructor(
 		private readonly mapReduceService: MapReduceService,
