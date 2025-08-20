@@ -1,12 +1,8 @@
 export interface ProjectSummarySchema {
-	projectName: string;
-	from: string;
-	to: string;
-	projectStatus: 'Green' | 'Amber' | 'Red';
-	riskBlockersActionsNeeded: string;
-	taskDetails: {
+	summary: string;
+	risk_Blocker_Action_Needed: string;
+	task_details: {
 		completed: string;
 		inProgress: string;
-		inReview: string;
 	};
 }

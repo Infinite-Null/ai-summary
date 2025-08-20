@@ -119,9 +119,9 @@ export class MapReduceService {
 		model: string = 'gpt-3.5-turbo',
 		temperature: number = 0.7,
 		totalTokens: number = 0,
-		chunkSize: number = 20_000,
+		chunkSize: number = 75_000, // default 20_000
 		chunkOverlap: number = 0,
-		maxTokens: number = 90_000,
+		maxTokens: number = 500_000, // default 90_000
 	): Promise<ProjectSummarySchema> {
 		/**
 		 * Initializes shared state.
@@ -300,6 +300,18 @@ export class MapReduceService {
 	};
 
 	private generateFinalSummary = async (state: typeof OverallState.State) => {
+		const generation = this.trace.generation({
+			name: `final-${this.provider}-${this.model}-generation`,
+			model: this.model,
+			modelParameters: {
+				temperature: this.temperature || 0.7,
+			},
+			metadata: {
+				totalTokens: this.totalTokens,
+				algorithm: 'map-reduce',
+			},
+		});
+
 		// Use the final prompt template with format instructions for structured output
 		const prompt = await this.finalPrompt.invoke({
 			context: state.collapsedSummaries,
@@ -313,6 +325,8 @@ export class MapReduceService {
 				? JSON.stringify(response.content)
 				: String(response.content),
 		);
+
+		generation.end({ output: response.content });
 
 		return {
 			finalSummary: JSON.stringify(parsedResponse),

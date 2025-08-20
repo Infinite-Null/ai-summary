@@ -8,7 +8,6 @@ import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { readFileSync } from 'fs';
 import { Document } from 'langchain/document';
 import { Langfuse } from 'langfuse';
 import {
@@ -22,6 +21,7 @@ import { SummarizeDTO } from './dto/summarize-dto';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
+import { SlackService } from 'src/slack/slack.service';
 
 @Injectable()
 export class AiEngineService {
@@ -45,37 +45,49 @@ export class AiEngineService {
 	/**
 	 * Prompt template for project performance report generation.
 	 */
-	private readonly prompt: string = `Using the context below, analyze the project data and create a structured project performance report.
-                
-                You must respond with a JSON object that strictly follows this format:
-                {{
-                    "projectName": "Name of the project",
-                    "from": "Start date in format YYYY-MM-DD",
-                    "to": "End date in format YYYY-MM-DD", 
-                    "projectStatus": "Green, Amber, or Red based on project progress",
-                    "riskBlockersActionsNeeded": "List critical items the client needs to be aware of - timeline changes, scope changes, access blocks, information/approval blocks, etc. List in most critical to least critical order. If no risks or blockers, indicate 'No critical risks or blockers identified.' Tag team member names who need to action items from the client.",
-                    "taskDetails": {{
-                        "completed": "List of completed tasks and achievements",
-                        "inProgress": "Tasks currently being worked on",
-                        "inReview": "Tasks that are completed but pending review or approval"
-			        }}
-                }}
+	private readonly prompt: string = `You are a project management analyst. Analyze the provided team standup data and create a comprehensive project summary report.
 
-                Guidelines:
-                - ProjectName: Extract or infer the project name from the context
-                - Dates: Use the reporting period dates or infer appropriate date ranges
-                - Project_Status: Analyze progress and assign Green (on track), Amber (some concerns), or Red (significant issues)
-                - Risk_Blockers_Actions_Needed: Focus on actionable items requiring client attention
-                - Task Details: Categorize work items appropriately
+CRITICAL INSTRUCTIONS:
+1. ONLY include information explicitly mentioned in the context
+2. Create a comprehensive narrative summary of the project progress
+3. Categorize tasks into completed and in-progress with detailed descriptions
+4. Identify risks, blockers, and actions needed based on the provided data
+5. Format task details with main issue titles followed by bullet points of specific actions
 
-                Context:
-                {context}
+You must respond with a valid JSON object that strictly follows this format:
+{{
+    "summary": "A comprehensive narrative summary of the project's current state, key accomplishments, and overall progress. This should be 3-4 paragraphs providing a complete overview of where the project stands, what has been achieved, and what is currently happening. Include specific details about deliverables, milestones, and current focus areas.",
+    "risk_Blocker_Action_Needed": "Detailed description of any risks, blockers, or critical actions that need immediate attention. If there are no explicit blockers mentioned, state 'No explicit blockers reported.' Include specific action items, dependencies, and any issues that could impact project timeline or success.",
+    "task_details": {{
+        "completed": "Format as: Main Issue Title: Brief description of the completed work. Use bullet points for specific items: - Specific action item completed - Another specific action item completed - Additional completed task details. Repeat this format for each major completed area. Include PR numbers, issue references, and specific achievements.",
+        "inProgress": "Format as: Main Issue Title: Brief description of ongoing work. Use bullet points for specific items: - Current task being worked on - Another ongoing task - Status of current work. Repeat this format for each major in-progress area. Include current status, next steps, and any dependencies."
+    }}
+}}
 
-                {format_instructions}`;
+CONTENT GUIDELINES:
+- Summary: Should read like a professional project status report narrative
+- Risk/Blockers: Focus on actionable items that need attention or resolution
+- Completed Tasks: Group related completed work under descriptive main titles
+- In-Progress Tasks: Group ongoing work under descriptive main titles with current status
+
+FORMATTING RULES:
+- Use only double quotes for JSON keys and string values
+- Escape any double quotes within string values using backslash
+- Keep descriptions clear and professional
+- Include specific details like PR numbers, dates, and technical specifics when mentioned
+- Use bullet points (-) for individual task items within each main category
+- Each main issue title should be followed by a colon and brief description
+- Maintain professional tone throughout
+
+Context:
+{context}
+
+{format_instructions}`;
 
 	constructor(
 		private readonly mapReduceService: MapReduceService,
 		private readonly stuffService: StuffService,
+		private readonly slackService: SlackService,
 	) {
 		this.langfuse = new Langfuse({
 			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
@@ -182,7 +194,15 @@ export class AiEngineService {
 	 * @param summarizeDto - The DTO containing the summarization parameters.
 	 * @returns A summary of the document.
 	 */
-	async summarize({ provider, model, temperature, algorithm }: SummarizeDTO) {
+	async summarize({
+		provider,
+		model,
+		temperature,
+		algorithm,
+		channelName,
+		startDate,
+		endDate,
+	}: SummarizeDTO) {
 		const trace = this.langfuse.trace({
 			name: `ai-poc-${algorithm}-summarization`,
 			metadata: {
@@ -194,8 +214,13 @@ export class AiEngineService {
 
 		const llm = this.createModelInstance(provider, model, temperature);
 
-		// TODO: Implement data ingestion from API responses as tool execution and remove this line.
-		const fileData = readFileSync('./dataset.txt', 'utf-8');
+		const standupData = await this.slackService.getStandups({
+			channelName: channelName || 'proj-ai-internal',
+			startDate: startDate || '2025-08-18T01:30:04.549Z',
+			endDate: endDate || '2025-08-18T17:30:04.549Z',
+		});
+
+		const fileData = JSON.stringify(standupData, null, 2);
 
 		/**
 		 * TODO: It's best to use a single document to store the data pertaining to a
@@ -262,7 +287,18 @@ export class AiEngineService {
 		this.logger.log('Running map-reduce summarization algorithm');
 
 		const mapPrompt = ChatPromptTemplate.fromMessages([
-			['user', 'Write a concise summary of the following: \n\n{context}'],
+			[
+				'user',
+				`Write a concise summary of the following with task categorization focusing on project progress and achievements:
+				\n\nRULES:
+                - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
+                - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
+                - Identify main project areas and group related tasks under descriptive titles
+                - Include specific details like PR numbers, technical specifics, and accomplishments
+                - Focus on project deliverables, milestones, and current work status
+				- Any Blockers: Tasks that are blocked by external factors, dependencies, or waiting on input
+				\n\n{context}`,
+			],
 		]);
 
 		const reduceTemplate = `
