@@ -3,6 +3,7 @@ import { AxiosInstance } from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { HttpService } from '@nestjs/axios';
+import { GithubIssuesResponse, Issue } from './types/output';
 
 const GITHUB_API_GQL_ENDPOINT = process.env.GITHUB_API_GQL_ENDPOINT;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -26,18 +27,20 @@ export class GithubService {
 	async fetchIssues(owner: string, repo: string, since: Date) {
 		const query = this.loadQuery('issues.graphql');
 
-		let issues: any[] = [];
+		let issues: Issue[] = [];
 		let after: string | null = null;
-		const variables = { owner, repo, since, after: null };
 
 		while (true) {
 			const response = await this.httpService.axiosRef.post(
 				GITHUB_API_GQL_ENDPOINT ?? '',
-				{ query, variables },
+				{
+					query,
+					variables: { owner, repo, since, after },
+				},
 				{ headers: { Authorization: `Bearer ${GITHUB_TOKEN}` } },
 			);
 
-			const data = response.data;
+			const data = response.data as GithubIssuesResponse;
 			if (data.errors) {
 				throw new HttpException(data.errors, 500);
 			}
