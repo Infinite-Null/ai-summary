@@ -15,7 +15,15 @@ export class GithubController {
 		@Query('owner') owner: string,
 		@Query('repo') repo: string,
 		@Query('since') since: Date,
+		@Query('body') body: boolean,
+		@Query('comment') comment: boolean,
 	) {
-		return this.githubService.fetchIssues(owner, repo, since);
+		return this.githubService.fetchIssues(
+			owner,
+			repo,
+			since,
+			body,
+			comment,
+		);
 	}
 }

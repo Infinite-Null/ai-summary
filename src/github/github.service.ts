@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { HttpService } from '@nestjs/axios';
 import { GithubIssuesResponse, Issue } from './types/output';
+import { getFetchIssueQuery } from './queries/graphql';
 
 const GITHUB_API_GQL_ENDPOINT = process.env.GITHUB_API_GQL_ENDPOINT;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -11,12 +12,6 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 @Injectable()
 export class GithubService {
 	private readonly client: AxiosInstance;
-	private loadQuery(fileName: string): string {
-		return fs.readFileSync(
-			path.join(__dirname, 'queries', fileName),
-			'utf8',
-		);
-	}
 
 	constructor(private readonly httpService: HttpService) {
 		if (!GITHUB_TOKEN && !GITHUB_API_GQL_ENDPOINT) {
@@ -24,8 +19,14 @@ export class GithubService {
 		}
 	}
 
-	async fetchIssues(owner: string, repo: string, since: Date) {
-		const query = this.loadQuery('issues.graphql');
+	async fetchIssues(
+		owner: string,
+		repo: string,
+		since: Date,
+		body: boolean = false,
+		comment: boolean = false,
+	): Promise<Issue[]> {
+		const query = getFetchIssueQuery(body, comment);
 
 		let issues: Issue[] = [];
 		let after: string | null = null;
