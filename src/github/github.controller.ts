@@ -26,4 +26,19 @@ export class GithubController {
 			comment,
 		);
 	}
+
+	@Get('V2/issues')
+	getStatusV2(
+		@Query('owner') owner: string,
+		@Query('repo') repo: string,
+		@Query('fromdate') fromdate: string,
+		@Query('todate') todate: string,
+	) {
+		return this.githubService.fetchIssuesWithDateRange(
+			owner,
+			repo,
+			fromdate,
+			todate,
+		);
+	}
 }

@@ -13,6 +13,19 @@ export interface GithubIssuesResponse {
 	errors?: any;
 }
 
+export interface GitHubSearchIssueResponse {
+	data: {
+		search: {
+			pageInfo: {
+				hasNextPage: boolean;
+				endCursor: string | null;
+			};
+			nodes: any[];
+		};
+	};
+	errors?: any;
+}
+
 export interface Issue {
 	issue_id: number;
 	title: string;

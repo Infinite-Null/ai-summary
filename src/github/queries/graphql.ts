@@ -56,8 +56,6 @@ export const getFetchIssueQuery = (body: boolean, comment: boolean) => {
 						}
 						fieldValues(first: 20) {
 							nodes {
-								__typename
-
 								# Single-select fields (e.g. Status, Priority, etc.)
 								... on ProjectV2ItemFieldSingleSelectValue {
 									name
@@ -95,4 +93,77 @@ export const getFetchIssueQuery = (body: boolean, comment: boolean) => {
 	}
 }
 	`;
+};
+
+export const getFetchIssueQueryWitDateRange = (comments: boolean = false) => {
+	return `
+	query ($searchQuery: String!, $after: String) {
+  search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      ... on Issue {
+        number
+        title
+        state
+        url
+        updatedAt
+        repository {
+          owner {
+            login
+          }
+          name
+        }
+        labels(first: 50) {
+          nodes {
+            name
+          }
+        }
+        projectItems(first: 10) {
+					nodes {
+						id
+						project {
+							title
+							number
+						}
+						fieldValues(first: 20) {
+							nodes {
+								# Single-select fields (e.g. Status, Priority, etc.)
+								... on ProjectV2ItemFieldSingleSelectValue {
+									name
+									field {
+										... on ProjectV2SingleSelectField {
+											name
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			${
+				comments
+					? `comments(first: 100) {
+					pageInfo {
+						hasNextPage
+						endCursor
+					}
+					nodes {
+						author {
+							login
+						}
+						body
+						createdAt
+						updatedAt
+						url
+					}
+				}`
+					: ''
+			}
+      }
+    }
+  }
+}`;
 };
