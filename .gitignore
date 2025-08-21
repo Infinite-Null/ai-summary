@@ -57,3 +57,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Datasets
 dataset.txt
+
+# Credentials
+src/config/credentials/credentials.json
+src/config/tokens/token.json
