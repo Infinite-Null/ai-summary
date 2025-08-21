@@ -15,27 +15,28 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 import { GitHubQueryDTO } from './github-query-dto';
 import { Type } from 'class-transformer';
+import { SlackQueryDTO } from './slack-query-dto';
 
 export class SummarizeDTO {
 	@IsOptional()
 	@IsEnum(ModelProvider)
 	@ApiProperty({
 		description: 'The model provider to use for the query.',
-		default: ModelProvider.OPENAI,
+		default: ModelProvider.GOOGLE,
 		enum: ModelProvider,
-		example: ModelProvider.OPENAI,
+		example: ModelProvider.GOOGLE,
 	})
-	provider?: ModelProvider;
+	provider: ModelProvider;
 
 	@IsOptional()
 	@IsEnum({ ...OpenAIModels, ...GoogleModels })
 	@ApiProperty({
 		description: 'The specific model to use for the query.',
-		default: OpenAIModels.GPT_4o_MINI,
+		default: GoogleModels.GEMINI_2_FLASH,
 		enum: [OpenAIModels, GoogleModels],
-		example: OpenAIModels.GPT_4o_MINI,
+		example: GoogleModels.GEMINI_2_FLASH,
 	})
-	model?: SupportedModels;
+	model: SupportedModels;
 
 	@IsOptional()
 	@IsNumber()
@@ -49,7 +50,7 @@ export class SummarizeDTO {
 		minimum: 0,
 		maximum: 1,
 	})
-	temperature?: number;
+	temperature: number;
 
 	@IsOptional()
 	@IsEnum(['map-reduce', 'stuff', 'auto'])
@@ -59,15 +60,7 @@ export class SummarizeDTO {
 		enum: ['map-reduce', 'stuff', 'auto'],
 		example: 'auto',
 	})
-	algorithm?: 'map-reduce' | 'stuff' | 'auto';
-
-	@IsOptional()
-	@ApiProperty({
-		description: 'The name of the Slack channel to fetch messages from.',
-		default: 'proj-ai-internal',
-		example: 'proj-ai-internal',
-	})
-	channelName?: string = 'proj-ai-internal';
+	algorithm: 'map-reduce' | 'stuff' | 'auto';
 
 	@IsOptional()
 	@ApiProperty({
@@ -75,7 +68,7 @@ export class SummarizeDTO {
 		default: '2025-08-18T01:30:04.549Z',
 		example: '2025-08-18T01:30:04.549Z',
 	})
-	startDate?: string = '2025-08-18T01:30:04.549Z';
+	startDate: string;
 
 	@IsOptional()
 	@ApiProperty({
@@ -83,15 +76,17 @@ export class SummarizeDTO {
 		default: '2025-08-18T17:30:04.549Z',
 		example: '2025-08-18T17:30:04.549Z',
 	})
-	endDate?: string = '2025-08-18T17:30:04.549Z';
+	endDate: string;
 
+	@IsOptional()
 	@ApiProperty({
 		description: 'The name of the document to summarize.',
 		default: 'Merge Tags Replacement - New',
 		example: 'Merge Tags Replacement - New',
 	})
-	docName?: string = 'Merge Tags Replacement - New';
+	docName: string;
 
+	@IsOptional()
 	@IsEnum(['Green', 'Amber', 'Red'])
 	@ApiProperty({
 		description: 'The project status.',
@@ -99,14 +94,15 @@ export class SummarizeDTO {
 		enum: ['Green', 'Amber', 'Red'],
 		example: 'Green',
 	})
-	projectStatus?: 'Green' | 'Amber' | 'Red';
+	projectStatus: 'Green' | 'Amber' | 'Red';
 
+	@IsOptional()
 	@ApiProperty({
 		description: 'The name of the project to summarize.',
 		default: 'AI Internal',
 		example: 'AI Internal',
 	})
-	projectName?: string = 'AI Internal';
+	projectName: string;
 
 	@IsOptional()
 	@ValidateNested()
@@ -117,4 +113,14 @@ export class SummarizeDTO {
 		required: false,
 	})
 	githubData: GitHubQueryDTO;
+
+	@IsOptional()
+	@ValidateNested()
+	@Type(() => SlackQueryDTO)
+	@ApiProperty({
+		type: SlackQueryDTO,
+		description: 'Slack specific data for LLM ingestion.',
+		required: false,
+	})
+	slackData: SlackQueryDTO;
 }

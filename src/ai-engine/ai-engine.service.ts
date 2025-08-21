@@ -234,7 +234,7 @@ Context:
 		model,
 		temperature,
 		algorithm,
-		channelName,
+		slackData,
 		startDate,
 		endDate,
 		projectName,
@@ -271,7 +271,7 @@ Context:
 			: formatDate('2025-08-18T17:30:04.549Z');
 
 		const standupData = await this.slackService.getStandups({
-			channelName: channelName || 'proj-ai-internal',
+			channelName: slackData.channelName || 'proj-ai-internal',
 			startDate: startDate || '2025-08-18T01:30:04.549Z',
 			endDate: endDate || '2025-08-18T17:30:04.549Z',
 		});
@@ -306,13 +306,13 @@ Context:
 			);
 		}
 
-		const slackData = JSON.stringify(standupData, null, 2);
+		const slackJsonData = JSON.stringify(standupData, null, 2);
 		docs.push(
 			new Document({
-				pageContent: slackData,
+				pageContent: slackJsonData,
 				metadata: {
 					source: 'slack',
-					channelName: channelName,
+					channelName: slackData.channelName,
 					startDate: formattedStartDate,
 					endDate: formattedEndDate,
 				},
