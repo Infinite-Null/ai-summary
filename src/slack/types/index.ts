@@ -20,9 +20,9 @@ export interface SlackUser {
 }
 
 export interface ParsedStandup {
-	yesterday: string;
-	today: string;
-	blocker: string;
+	yesterday: string[];
+	today: string[];
+	blocker: string[];
 	text: string;
 }
 

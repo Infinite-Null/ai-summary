@@ -204,7 +204,6 @@ export class SlackService {
 				}
 
 				if (result.messages) {
-					// Filter out the parent message (first message in thread)
 					const replies = await Promise.all(
 						result.messages.slice(1).map(async (msg) => {
 							let name = '';
@@ -268,11 +267,19 @@ export class SlackService {
 					continue;
 				}
 
-				validEntries.push({
-					name: reply.name,
-					user: reply.user,
-					standup: this.parseStandup(reply.text),
-				});
+				const standup = this.parseStandup(reply.text);
+
+				if (
+					standup.yesterday.length &&
+					standup.today.length &&
+					standup.blocker.length
+				) {
+					validEntries.push({
+						name: reply.name,
+						user: reply.user,
+						standup,
+					});
+				}
 			}
 
 			if (validEntries.length > 0) {
@@ -298,17 +305,29 @@ export class SlackService {
 
 			// Extract and clean up the content
 			return {
-				yesterday: yesterdayMatch?.[1]?.trim() || '',
-				today: todayMatch?.[1]?.trim() || '',
-				blocker: blockersMatch?.[1]?.trim() || '',
+				yesterday:
+					yesterdayMatch?.[1]
+						?.split('\n')
+						.map((s) => s.trim())
+						.filter(Boolean) || [],
+				today:
+					todayMatch?.[1]
+						?.split('\n')
+						.map((s) => s.trim())
+						.filter(Boolean) || [],
+				blocker:
+					blockersMatch?.[1]
+						?.split('\n')
+						.map((s) => s.trim())
+						.filter(Boolean) || [],
 				text: standup.trim(),
 			};
 		} catch (error) {
 			this.logger.warn('Failed to parse standup text:', error);
 			return {
-				yesterday: '',
-				today: '',
-				blocker: '',
+				yesterday: [],
+				today: [],
+				blocker: [],
 				text: '',
 			};
 		}
