@@ -10,6 +10,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Document } from 'langchain/document';
 import { Langfuse } from 'langfuse';
+import { SlackService } from 'src/slack/slack.service';
 import {
 	GoogleModels,
 	ModelProvider,
@@ -21,7 +22,7 @@ import { SummarizeDTO } from './dto/summarize-dto';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
-import { SlackService } from 'src/slack/slack.service';
+import { ProjectSummarySchema } from './types/output';
 import { GithubService } from 'src/github/github.service';
 
 @Injectable()
@@ -58,10 +59,11 @@ CRITICAL INSTRUCTIONS:
 You must respond with a valid JSON object that strictly follows this format:
 {{
     "summary": "A comprehensive narrative summary of the project's current state, key accomplishments, and overall progress. This should be 3-4 paragraphs providing a complete overview of where the project stands, what has been achieved, and what is currently happening. Include specific details about deliverables, milestones, and current focus areas.",
-    "risk_Blocker_Action_Needed": "Detailed description of any risks, blockers, or critical actions that need immediate attention. If there are no explicit blockers mentioned, state 'No explicit blockers reported.' Include specific action items, dependencies, and any issues that could impact project timeline or success.",
-    "task_details": {{
+    "riskBlockerActionNeeded": "Detailed description of any risks, blockers, or critical actions that need immediate attention. If there are no explicit blockers mentioned, state 'No explicit blockers reported.' Include specific action items, dependencies, and any issues that could impact project timeline or success.",
+    "taskDetails": {{
         "completed": "Format as: Main Issue Title: Brief description of the completed work. Use bullet points for specific items: - Specific action item completed - Another specific action item completed - Additional completed task details. Repeat this format for each major completed area. Include PR numbers, issue references, and specific achievements.",
-        "inProgress": "Format as: Main Issue Title: Brief description of ongoing work. Use bullet points for specific items: - Current task being worked on - Another ongoing task - Status of current work. Repeat this format for each major in-progress area. Include current status, next steps, and any dependencies."
+        "inProgress": "Format as: Main Issue Title: Brief description of ongoing work. Use bullet points for specific items: - Current task being worked on - Another ongoing task - Status of current work. Repeat this format for each major in-progress area. Include current status, next steps, and any dependencies.",
+        "inReview": "Format as: Main Issue Title: Brief description of work under review. Use bullet points for specific items: - Pull request or deliverable under review - Code review or approval process - Documentation or design review status. Repeat this format for each major review area. Include PR numbers, reviewer information, and review status when available.  If there are no explicit in review, state 'Nothing is in review.'"
     }}
 }}
 
@@ -70,6 +72,7 @@ CONTENT GUIDELINES:
 - Risk/Blockers: Focus on actionable items that need attention or resolution
 - Completed Tasks: Group related completed work under descriptive main titles
 - In-Progress Tasks: Group ongoing work under descriptive main titles with current status
+- In-Review Tasks: Group work under review under descriptive main titles with review status
 
 FORMATTING RULES:
 - Use only double quotes for JSON keys and string values
@@ -135,6 +138,31 @@ Context:
 			return Object.values(GoogleModels).includes(model as GoogleModels);
 		}
 		return false;
+	}
+
+	structureResponse(
+		response: ProjectSummarySchema,
+		projectName: string | undefined,
+		from: string | undefined,
+		to: string | undefined,
+		projectStatus: string | undefined,
+		docName: string | undefined,
+	) {
+		return {
+			replacements: {
+				projectName,
+				from,
+				to,
+				projectStatus,
+				summary: response?.summary ?? '',
+				riskBlockerActionNeeded:
+					response?.riskBlockerActionNeeded ?? '',
+				completed: response?.taskDetails?.completed ?? '',
+				inProgress: response?.taskDetails?.inProgress ?? '',
+				inReview: response?.taskDetails?.inReview ?? '',
+			},
+			docName,
+		};
 	}
 
 	/**
@@ -204,6 +232,9 @@ Context:
 		channelName,
 		startDate,
 		endDate,
+		projectName,
+		docName,
+		projectStatus,
 	}: SummarizeDTO) {
 		const trace = this.langfuse.trace({
 			name: `ai-poc-${algorithm}-summarization`,
@@ -215,6 +246,23 @@ Context:
 		});
 
 		const llm = this.createModelInstance(provider, model, temperature);
+
+		// Format dates to readable format (DD MMM YYYY)
+		const formatDate = (dateString: string) => {
+			const date = new Date(dateString);
+			return date.toLocaleDateString('en-GB', {
+				day: '2-digit',
+				month: 'short',
+				year: 'numeric',
+			});
+		};
+
+		const formattedStartDate = startDate
+			? formatDate(startDate)
+			: formatDate('2025-08-18T01:30:04.549Z');
+		const formattedEndDate = endDate
+			? formatDate(endDate)
+			: formatDate('2025-08-18T17:30:04.549Z');
 
 		const standupData = await this.slackService.getStandups({
 			channelName: channelName || 'proj-ai-internal',
@@ -282,7 +330,16 @@ Context:
 			});
 
 			await this.langfuse.shutdownAsync();
-			return result;
+			const finalStructuredResponse = this.structureResponse(
+				result,
+				projectName,
+				formattedStartDate,
+				formattedEndDate,
+				projectStatus,
+				docName,
+			);
+
+			return finalStructuredResponse;
 		}
 
 		// Else, fall back to the map-reduce summarization method.
@@ -295,6 +352,7 @@ Context:
 				\n\nRULES:
                 - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
                 - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
+                - In Review: Tasks under review, awaiting approval, or in pull request/code review process
                 - Identify main project areas and group related tasks under descriptive titles
                 - Include specific details like PR numbers, technical specifics, and accomplishments
                 - Focus on project deliverables, milestones, and current work status
@@ -331,6 +389,15 @@ Context:
 
 		await this.langfuse.shutdownAsync();
 
-		return response;
+		const finalStructuredResponse = this.structureResponse(
+			response,
+			projectName,
+			formattedStartDate,
+			formattedEndDate,
+			projectStatus,
+			docName,
+		);
+
+		return finalStructuredResponse;
 	}
 }

@@ -1,8 +1,9 @@
 export interface ProjectSummarySchema {
 	summary: string;
-	risk_Blocker_Action_Needed: string;
-	task_details: {
+	riskBlockerActionNeeded: string;
+	taskDetails: {
 		completed: string;
 		inProgress: string;
+		inReview: string;
 	};
 }
