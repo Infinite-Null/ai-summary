@@ -12,6 +12,7 @@ import { Document } from 'langchain/document';
 import { Langfuse } from 'langfuse';
 import { GithubService } from 'src/github/github.service';
 import { SlackService } from 'src/slack/slack.service';
+import { GoogleDocService } from 'src/google-doc/google-doc.service';
 import {
 	GoogleModels,
 	ModelProvider,
@@ -96,6 +97,7 @@ Context:
 		private readonly stuffService: StuffService,
 		private readonly slackService: SlackService,
 		private readonly githubService: GithubService,
+		private readonly googleDocService: GoogleDocService,
 	) {
 		this.langfuse = new Langfuse({
 			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
@@ -374,7 +376,15 @@ Context:
 				docName,
 			);
 
-			return finalStructuredResponse;
+			const documentUrl = await this.googleDocService.generateDocument(
+				// eslint-disable-next-line
+				finalStructuredResponse as any,
+			);
+
+			return {
+				...finalStructuredResponse,
+				...documentUrl,
+			};
 		}
 
 		// Else, fall back to the map-reduce summarization method.
@@ -433,6 +443,14 @@ Context:
 			docName,
 		);
 
-		return finalStructuredResponse;
+		const documentUrl = await this.googleDocService.generateDocument(
+			// eslint-disable-next-line
+			finalStructuredResponse as any,
+		);
+
+		return {
+			...finalStructuredResponse,
+			...documentUrl,
+		};
 	}
 }

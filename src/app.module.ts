@@ -4,6 +4,7 @@ import { AiEngineModule } from './ai-engine/ai-engine.module';
 import { AppController } from './app.controller';
 import { GithubModule } from './github/github.module';
 import { SlackModule } from './slack/slack.module';
+import { GoogleDocModule } from './google-doc/google-doc.module';
 
 @Module({
 	imports: [
@@ -11,6 +12,7 @@ import { SlackModule } from './slack/slack.module';
 		AiEngineModule,
 		GithubModule,
 		SlackModule,
+		GoogleDocModule,
 	],
 	controllers: [AppController],
 	providers: [],
