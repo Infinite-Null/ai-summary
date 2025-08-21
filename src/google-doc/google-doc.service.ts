@@ -38,7 +38,7 @@ export class GoogleDocService {
 				outputName,
 			);
 
-			return { url };
+			return { documentUrl: url };
 		} catch (err) {
 			if (err instanceof BadRequestException) {
 				throw err;

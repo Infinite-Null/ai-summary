@@ -4,7 +4,7 @@ export interface GenerateDocRequest {
 }
 
 export interface GenerateDocResponse {
-	url: string;
+	documentUrl: string;
 }
 
 export interface GoogleCredentials {

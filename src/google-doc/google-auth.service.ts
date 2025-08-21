@@ -11,6 +11,8 @@ export class GoogleAuthService {
 	private logger = new Logger(GoogleAuthService.name);
 
 	async authorize(): Promise<any> {
+		this.logger.log('Starting Authorization...');
+
 		const credentials: GoogleCredentials = JSON.parse(
 			fs.readFileSync(GOOGLE_CONFIG.CREDENTIALS_PATH, 'utf8'),
 		) as GoogleCredentials;
@@ -26,8 +28,10 @@ export class GoogleAuthService {
 			const token: GoogleTokens = JSON.parse(
 				fs.readFileSync(GOOGLE_CONFIG.TOKEN_PATH, 'utf8'),
 			) as GoogleTokens;
+			this.logger.log('Token found, setting credentials...');
 			oAuth2Client.setCredentials(token);
 		} catch {
+			this.logger.log('No valid token found, requesting a new one...');
 			await this.getNewToken(oAuth2Client);
 		}
 

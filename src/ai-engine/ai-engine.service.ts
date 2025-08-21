@@ -24,6 +24,7 @@ import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
 import { ProjectSummarySchema } from './types/output';
 import { GithubService } from 'src/github/github.service';
+import { GoogleDocService } from 'src/google-doc/google-doc.service';
 
 @Injectable()
 export class AiEngineService {
@@ -93,6 +94,7 @@ Context:
 		private readonly stuffService: StuffService,
 		private readonly slackService: SlackService,
 		private readonly githubService: GithubService,
+		private readonly googleDocService: GoogleDocService,
 	) {
 		this.langfuse = new Langfuse({
 			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
@@ -371,7 +373,15 @@ Context:
 				docName,
 			);
 
-			return finalStructuredResponse;
+			const documentUrl = await this.googleDocService.generateDocument(
+				// eslint-disable-next-line
+				finalStructuredResponse as any,
+			);
+
+			return {
+				...finalStructuredResponse,
+				...documentUrl,
+			};
 		}
 
 		// Else, fall back to the map-reduce summarization method.
@@ -430,6 +440,14 @@ Context:
 			docName,
 		);
 
-		return finalStructuredResponse;
+		const documentUrl = await this.googleDocService.generateDocument(
+			// eslint-disable-next-line
+			finalStructuredResponse as any,
+		);
+
+		return {
+			...finalStructuredResponse,
+			...documentUrl,
+		};
 	}
 }

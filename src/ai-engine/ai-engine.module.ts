@@ -5,9 +5,10 @@ import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
 import { SlackModule } from 'src/slack/slack.module';
 import { GithubModule } from 'src/github/github.module';
+import { GoogleDocModule } from 'src/google-doc/google-doc.module';
 
 @Module({
-	imports: [SlackModule, GithubModule],
+	imports: [SlackModule, GithubModule, GoogleDocModule],
 	controllers: [AiEngineController],
 	providers: [AiEngineService, MapReduceService, StuffService],
 })
