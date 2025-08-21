@@ -4,15 +4,16 @@ import { HttpService } from '@nestjs/axios';
 import { GithubIssuesResponse, Issue } from './types/output';
 import { getFetchIssueQuery } from './queries/graphql';
 
-const GITHUB_API_GQL_ENDPOINT = process.env.GITHUB_API_GQL_ENDPOINT;
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
 @Injectable()
 export class GithubService {
+	private readonly GITHUB_API_GQL_ENDPOINT =
+		process.env.GITHUB_API_GQL_ENDPOINT;
+	private readonly GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
 	private readonly client: AxiosInstance;
 
 	constructor(private readonly httpService: HttpService) {
-		if (!GITHUB_TOKEN && !GITHUB_API_GQL_ENDPOINT) {
+		if (!this.GITHUB_TOKEN && !this.GITHUB_API_GQL_ENDPOINT) {
 			throw new HttpException('Environment variable is not set.', 500);
 		}
 		this.client = this.httpService.axiosRef;
@@ -32,12 +33,12 @@ export class GithubService {
 
 		while (true) {
 			const response = await this.client.post(
-				GITHUB_API_GQL_ENDPOINT ?? '',
+				this.GITHUB_API_GQL_ENDPOINT ?? '',
 				{
 					query,
 					variables: { owner, repo, since, after },
 				},
-				{ headers: { Authorization: `Bearer ${GITHUB_TOKEN}` } },
+				{ headers: { Authorization: `Bearer ${this.GITHUB_TOKEN}` } },
 			);
 
 			const data = response.data as GithubIssuesResponse;
