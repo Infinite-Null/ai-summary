@@ -1,4 +1,11 @@
-import { IsEnum, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import {
+	IsEnum,
+	IsNumber,
+	IsOptional,
+	Max,
+	Min,
+	ValidateNested,
+} from 'class-validator';
 import {
 	GoogleModels,
 	ModelProvider,
@@ -6,11 +13,10 @@ import {
 	type SupportedModels,
 } from './quick-ask.dto';
 import { ApiProperty } from '@nestjs/swagger';
+import { GitHubQueryDTO } from './github-query-dto';
+import { Type } from 'class-transformer';
 
 export class SummarizeDTO {
-	/**
-	 * The model provider to use for the query.
-	 */
 	@IsOptional()
 	@IsEnum(ModelProvider)
 	@ApiProperty({
@@ -21,9 +27,6 @@ export class SummarizeDTO {
 	})
 	provider?: ModelProvider;
 
-	/**
-	 * The specific model to use for the query.
-	 */
 	@IsOptional()
 	@IsEnum({ ...OpenAIModels, ...GoogleModels })
 	@ApiProperty({
@@ -34,9 +37,6 @@ export class SummarizeDTO {
 	})
 	model?: SupportedModels;
 
-	/**
-	 * The temperature setting for the model.
-	 */
 	@IsOptional()
 	@IsNumber()
 	@Min(0)
@@ -107,4 +107,14 @@ export class SummarizeDTO {
 		example: 'AI Internal',
 	})
 	projectName?: string = 'AI Internal';
+
+	@IsOptional()
+	@ValidateNested()
+	@Type(() => GitHubQueryDTO)
+	@ApiProperty({
+		type: GitHubQueryDTO,
+		description: 'GitHub specific data for LLM ingestion.',
+		required: false,
+	})
+	githubData: GitHubQueryDTO;
 }
