@@ -245,6 +245,23 @@ Context:
 
 		const llm = this.createModelInstance(provider, model, temperature);
 
+		// Format dates to readable format (DD MMM YYYY)
+		const formatDate = (dateString: string) => {
+			const date = new Date(dateString);
+			return date.toLocaleDateString('en-GB', {
+				day: '2-digit',
+				month: 'short',
+				year: 'numeric',
+			});
+		};
+
+		const formattedStartDate = startDate
+			? formatDate(startDate)
+			: formatDate('2025-08-18T01:30:04.549Z');
+		const formattedEndDate = endDate
+			? formatDate(endDate)
+			: formatDate('2025-08-18T17:30:04.549Z');
+
 		const standupData = await this.slackService.getStandups({
 			channelName: channelName || 'proj-ai-internal',
 			startDate: startDate || '2025-08-18T01:30:04.549Z',
@@ -314,8 +331,8 @@ Context:
 			const finalStructuredResponse = this.structureResponse(
 				result,
 				projectName,
-				startDate,
-				endDate,
+				formattedStartDate,
+				formattedEndDate,
 				projectStatus,
 				docName,
 			);
@@ -373,8 +390,8 @@ Context:
 		const finalStructuredResponse = this.structureResponse(
 			response,
 			projectName,
-			startDate,
-			endDate,
+			formattedStartDate,
+			formattedEndDate,
 			projectStatus,
 			docName,
 		);
