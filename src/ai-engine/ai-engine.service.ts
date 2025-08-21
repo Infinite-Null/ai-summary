@@ -271,6 +271,12 @@ Context:
 			endDate: endDate || '2025-08-18T17:30:04.549Z',
 		});
 
+		/**
+		 * It's best to use a single document to store the data pertaining to a
+		 * particular source as it's easier and efficient for bulk summarization. If
+		 * it would have been RAG/retrieval, then we would have used multiple documents
+		 * with metadata to store the data.
+		 */
 		const docs: Document[] = [];
 
 		if (githubData.enabled) {
@@ -307,15 +313,6 @@ Context:
 				},
 			}),
 		);
-
-		/**
-		 * It's best to use a single document to store the data pertaining to a
-		 * particular source as it's easier and efficient for bulk summarization. If
-		 * it would have been RAG/retrieval, then we would have used multiple documents
-		 * with metadata to store the data.
-		 *
-		 * @note Ensure that we pass metadata pertaining to during actual implementation.
-		 */
 
 		const span = trace.span({
 			name: 'ai-poc-token-count',
