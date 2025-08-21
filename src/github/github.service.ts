@@ -12,9 +12,9 @@ export class GithubService {
 	private readonly client: AxiosInstance;
 
 	constructor(private readonly httpService: HttpService) {
-		if (!GITHUB_TOKEN && !GITHUB_API_GQL_ENDPOINT) {
-			throw new HttpException('Environment variable is not set.', 500);
-		}
+		// if (!GITHUB_TOKEN && !GITHUB_API_GQL_ENDPOINT) {
+		// 	throw new HttpException('Environment variable is not set.', 500);
+		// }
 		this.client = this.httpService.axiosRef;
 	}
 

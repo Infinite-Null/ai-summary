@@ -84,4 +84,27 @@ export class SummarizeDTO {
 		example: '2025-08-18T17:30:04.549Z',
 	})
 	endDate?: string = '2025-08-18T17:30:04.549Z';
+
+	@ApiProperty({
+		description: 'The name of the document to summarize.',
+		default: 'Merge Tags Replacement - New',
+		example: 'Merge Tags Replacement - New',
+	})
+	docName?: string = 'Merge Tags Replacement - New';
+
+	@IsEnum(['Green', 'Amber', 'Red'])
+	@ApiProperty({
+		description: 'The project status.',
+		default: 'Green',
+		enum: ['Green', 'Amber', 'Red'],
+		example: 'Green',
+	})
+	projectStatus?: 'Green' | 'Amber' | 'Red';
+
+	@ApiProperty({
+		description: 'The name of the project to summarize.',
+		default: 'AI Internal',
+		example: 'AI Internal',
+	})
+	projectName?: string = 'AI Internal';
 }
