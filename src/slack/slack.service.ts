@@ -39,8 +39,6 @@ export class SlackService {
 	 */
 	async getChannelId(channelName: string): Promise<string> {
 		try {
-			this.logger.debug(`Looking up channel ID for: ${channelName}`);
-
 			// Remove # prefix if present
 			const cleanChannelName = channelName.replace(/^#/, '');
 
@@ -59,8 +57,6 @@ export class SlackService {
 			if (!channel || !channel.id) {
 				throw new Error(`Channel #${cleanChannelName} not found`);
 			}
-
-			this.logger.debug(`Found channel ID: ${channel.id}`);
 
 			return channel.id;
 		} catch (error) {
@@ -85,8 +81,6 @@ export class SlackService {
 			let allMessages: ConversationsHistoryResponse['messages'] = [];
 			let cursor: string | undefined;
 
-			this.logger.debug(`Fetching messages from channel: ${channelId}`);
-
 			do {
 				const result: ConversationsHistoryResponse =
 					await this.client.conversations.history({
@@ -107,8 +101,6 @@ export class SlackService {
 
 				cursor = result.response_metadata?.next_cursor;
 			} while (cursor);
-
-			this.logger.debug(`Retrieved ${allMessages.length} messages`);
 
 			const slackMessages: SlackMessage[] = allMessages.map((msg) => ({
 				username: msg.username,
@@ -149,8 +141,6 @@ export class SlackService {
 				return null;
 			}
 
-			this.logger.debug(`Fetched user info for ${userId}`);
-
 			return {
 				username,
 				name,
@@ -181,10 +171,6 @@ export class SlackService {
 		} = {},
 	): Promise<SlackMessage[]> {
 		try {
-			this.logger.debug(
-				`Fetching replies for message ${threadTs} in channel ${channelId}`,
-			);
-
 			let allReplies: SlackMessage[] = [];
 			let cursor: string | undefined;
 
@@ -233,7 +219,6 @@ export class SlackService {
 				}
 			} while (cursor);
 
-			this.logger.debug(`Retrieved ${allReplies.length} replies`);
 			return allReplies;
 		} catch (error) {
 			const errorMessage =
@@ -351,9 +336,6 @@ export class SlackService {
 				const replies = await this.getMessageReplies(
 					channelId,
 					message.ts,
-				);
-				this.logger.debug(
-					`Found ${replies.length} replies for message ${message.ts}`,
 				);
 				standupMessagesWithReplies.push({
 					...message,
