@@ -22,6 +22,7 @@ import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
 import { SlackService } from 'src/slack/slack.service';
+import { GithubService } from 'src/github/github.service';
 
 @Injectable()
 export class AiEngineService {
@@ -88,6 +89,7 @@ Context:
 		private readonly mapReduceService: MapReduceService,
 		private readonly stuffService: StuffService,
 		private readonly slackService: SlackService,
+		private readonly githubService: GithubService,
 	) {
 		this.langfuse = new Langfuse({
 			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
@@ -220,7 +222,7 @@ Context:
 			endDate: endDate || '2025-08-18T17:30:04.549Z',
 		});
 
-		const fileData = JSON.stringify(standupData, null, 2);
+		const slackData = JSON.stringify(standupData, null, 2);
 
 		/**
 		 * TODO: It's best to use a single document to store the data pertaining to a
@@ -230,7 +232,7 @@ Context:
 		 *
 		 * @note Ensure that we pass metadata pertaining to during actual implementation.
 		 */
-		const docs = [new Document({ pageContent: fileData, metadata: {} })];
+		const docs = [new Document({ pageContent: slackData, metadata: {} })];
 
 		const span = trace.span({
 			name: 'ai-poc-token-count',
