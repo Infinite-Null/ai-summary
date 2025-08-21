@@ -23,6 +23,7 @@ import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
 import { ProjectSummarySchema } from './types/output';
+import { GithubService } from 'src/github/github.service';
 
 @Injectable()
 export class AiEngineService {
@@ -91,6 +92,7 @@ Context:
 		private readonly mapReduceService: MapReduceService,
 		private readonly stuffService: StuffService,
 		private readonly slackService: SlackService,
+		private readonly githubService: GithubService,
 	) {
 		this.langfuse = new Langfuse({
 			publicKey: process.env.LANGFUSE_PUBLIC_KEY,
@@ -233,6 +235,7 @@ Context:
 		projectName,
 		docName,
 		projectStatus,
+		githubData,
 	}: SummarizeDTO) {
 		const trace = this.langfuse.trace({
 			name: `ai-poc-${algorithm}-summarization`,
@@ -268,17 +271,48 @@ Context:
 			endDate: endDate || '2025-08-18T17:30:04.549Z',
 		});
 
-		const fileData = JSON.stringify(standupData, null, 2);
-
 		/**
-		 * TODO: It's best to use a single document to store the data pertaining to a
+		 * It's best to use a single document to store the data pertaining to a
 		 * particular source as it's easier and efficient for bulk summarization. If
 		 * it would have been RAG/retrieval, then we would have used multiple documents
 		 * with metadata to store the data.
-		 *
-		 * @note Ensure that we pass metadata pertaining to during actual implementation.
 		 */
-		const docs = [new Document({ pageContent: fileData, metadata: {} })];
+		const docs: Document[] = [];
+
+		if (githubData.enabled) {
+			const { fetchBody, fetchComments, owner, repo, since } = githubData;
+			const githubResponse = await this.githubService.fetchIssues(
+				owner,
+				repo,
+				new Date(since),
+				fetchBody,
+				fetchComments,
+			);
+			docs.push(
+				new Document({
+					pageContent: JSON.stringify(githubResponse, null, 2),
+					metadata: {
+						source: 'github',
+						owner,
+						repo,
+						since: since,
+					},
+				}),
+			);
+		}
+
+		const slackData = JSON.stringify(standupData, null, 2);
+		docs.push(
+			new Document({
+				pageContent: slackData,
+				metadata: {
+					source: 'slack',
+					channelName: channelName,
+					startDate: formattedStartDate,
+					endDate: formattedEndDate,
+				},
+			}),
+		);
 
 		const span = trace.span({
 			name: 'ai-poc-token-count',
