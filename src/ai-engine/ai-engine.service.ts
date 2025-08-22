@@ -285,14 +285,15 @@ Context:
 		const docs: Document[] = [];
 
 		if (githubData.enabled) {
-			const { fetchBody, fetchComments, owner, repo, since } = githubData;
-			const githubResponse = await this.githubService.fetchIssues(
-				owner,
-				repo,
-				new Date(since),
-				fetchBody,
-				fetchComments,
-			);
+			const { owner, repo, fromdate, todate, projectboard } = githubData;
+			const githubResponse =
+				await this.githubService.fetchIssuesWithDateRange(
+					owner,
+					repo,
+					fromdate,
+					todate,
+					projectboard,
+				);
 			docs.push(
 				new Document({
 					pageContent: JSON.stringify(githubResponse, null, 2),
@@ -300,7 +301,8 @@ Context:
 						source: 'github',
 						owner,
 						repo,
-						since: since,
+						fromdate,
+						todate,
 					},
 				}),
 			);
