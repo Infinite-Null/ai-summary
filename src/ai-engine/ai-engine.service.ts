@@ -395,6 +395,9 @@ export class AiEngineService {
 			model,
 			temperature,
 			totalTokens,
+			this.prompt,
+			mapTemplate,
+			reduceTemplate,
 		);
 
 		await this.langfuse.shutdownAsync();
