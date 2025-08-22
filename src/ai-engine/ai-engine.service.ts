@@ -21,13 +21,7 @@ import {
 	SupportedModels,
 } from './dto/quick-ask.dto';
 import { SummarizeDTO } from './dto/summarize-dto';
-import {
-	CONTENT_GUIDELINES,
-	CRITICAL_INSTRUCTIONS,
-	FORMAT,
-	FORMATTING_RULES,
-	QUICK_ASK_SYSTEM_PROMPT,
-} from './prompts';
+import { FORMAT, QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
 import { ProjectSummarySchema } from './types/output';
@@ -134,15 +128,6 @@ export class AiEngineService {
 		};
 	}
 
-	compiledPrompt(): string {
-		return this.prompt.compile({
-			critical_instructions: CRITICAL_INSTRUCTIONS,
-			format: FORMAT,
-			content_guidelines: CONTENT_GUIDELINES,
-			formatting_rules: FORMATTING_RULES,
-		});
-	}
-
 	/**
 	 * Processes a quick ask query and returns a response.
 	 *
@@ -224,7 +209,7 @@ export class AiEngineService {
 			},
 		});
 
-		this.prompt = await this.langfuse.getPrompt('AI summary poc');
+		this.prompt = await this.langfuse.getPrompt('ai-summary-poc');
 		const llm = this.createModelInstance(provider, model, temperature);
 
 		// Format dates to readable format (DD MMM YYYY)
@@ -319,7 +304,11 @@ export class AiEngineService {
 		) {
 			this.logger.log('Running stuff summarization algorithm');
 
-			const prompt = PromptTemplate.fromTemplate(this.compiledPrompt());
+			const prompt = PromptTemplate.fromTemplate(
+				this.prompt.compile({
+					format: FORMAT,
+				}),
+			);
 
 			const generation = trace.generation({
 				name: `${provider}-${model}-generation`,
@@ -367,7 +356,7 @@ export class AiEngineService {
 		this.logger.log('Running map-reduce summarization algorithm');
 
 		const mapTemplate = await this.langfuse.getPrompt(
-			'AI-Internal POC map prompt',
+			'ai-summary-map-template',
 		);
 
 		const mapPrompt = ChatPromptTemplate.fromMessages([
@@ -375,14 +364,18 @@ export class AiEngineService {
 		]);
 
 		const reduceTemplate = await this.langfuse.getPrompt(
-			'AI-Internal Reduce Template',
+			'ai-summary-reduce-template',
 		);
 
 		const reducePrompt = ChatPromptTemplate.fromMessages([
 			['user', reduceTemplate.compile()],
 		]);
 
-		const finalPrompt = PromptTemplate.fromTemplate(this.compiledPrompt());
+		const finalPrompt = PromptTemplate.fromTemplate(
+			this.prompt.compile({
+				format: FORMAT,
+			}),
+		);
 
 		const response = await this.mapReduceService.summarize(
 			llm,
