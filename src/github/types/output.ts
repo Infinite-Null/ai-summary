@@ -34,14 +34,14 @@ export interface Issue {
 	updatedAt: string; // ISO date string
 	closedAt: string | null; // nullable ISO date
 	labels: {
-		nodes: Label[];
+		items: Label[];
 	};
 	milestone: Milestone | null;
 	crossReferencedPRs: {
-		nodes: CrossReferencedPR[];
+		items: CrossReferencedPR[];
 	};
 	projectItems: {
-		nodes: ProjectItem[];
+		items: ProjectItem[];
 	};
 }
 
@@ -71,7 +71,7 @@ export interface ProjectItem {
 		number: number;
 	};
 	fieldValues: {
-		nodes: ProjectFieldValue[];
+		items: ProjectFieldValue[];
 	};
 }
 

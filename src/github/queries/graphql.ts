@@ -117,19 +117,35 @@ export const getFetchIssueQueryWitDateRange = (comments: boolean = false) => {
           name
         }
         labels(first: 50) {
-          nodes {
+          items: nodes {
             name
           }
         }
+		  crossReferencedPRs: timelineItems(
+					first: 100
+					itemTypes: [CROSS_REFERENCED_EVENT]
+				) {
+					items: nodes {
+						... on CrossReferencedEvent {
+							source {
+								... on PullRequest {
+									pr_id: number
+									title
+									url
+								}
+							}
+						}
+					}
+				}
         projectItems(first: 10) {
-					nodes {
+					items: nodes {
 						id
 						project {
 							title
 							number
 						}
 						fieldValues(first: 20) {
-							nodes {
+							items: nodes {
 								# Single-select fields (e.g. Status, Priority, etc.)
 								... on ProjectV2ItemFieldSingleSelectValue {
 									name
@@ -150,7 +166,7 @@ export const getFetchIssueQueryWitDateRange = (comments: boolean = false) => {
 						hasNextPage
 						endCursor
 					}
-					nodes {
+					items: nodes {
 						author {
 							login
 						}

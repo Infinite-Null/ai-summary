@@ -82,6 +82,7 @@ export class GithubService {
 		repo: string,
 		fromdate: string,
 		todate: string,
+		projectboard: string,
 	): Promise<Issue[]> {
 		const nonBlockedIssueGQLQuery = getFetchIssueQueryWitDateRange();
 		const blockedIssueGQLQuery = getFetchIssueQueryWitDateRange(true);
@@ -151,6 +152,21 @@ export class GithubService {
 
 			blockedIssueAfterPointer = pageInfo.endCursor;
 		}
+
+		issues.forEach((item) => {
+			if (!item.projectItems?.items) return;
+
+			item.projectItems.items = item.projectItems.items.filter((e) => {
+				if (e.project?.title !== projectboard) return false;
+
+				if (e.fieldValues?.items) {
+					e.fieldValues.items = e.fieldValues.items.filter(
+						(f) => 'name' in f,
+					);
+				}
+				return true;
+			});
+		});
 
 		return issues;
 	}
