@@ -3,7 +3,6 @@ import {
 	BadRequestException,
 	InternalServerErrorException,
 } from '@nestjs/common';
-import { GoogleAuth } from 'google-auth-library';
 import { GoogleAuthService } from './google-auth.service';
 import { DocGeneratorService } from './doc-generator.service';
 import { GenerateDocRequest, GenerateDocResponse } from './types/index';
@@ -20,9 +19,7 @@ export class GoogleDocService {
 		requestData: GenerateDocRequest,
 	): Promise<GenerateDocResponse> {
 		try {
-			const googleAuth =
-				(await this.googleAuthService.authorize()) as GoogleAuth;
-			const auth = googleAuth;
+			const auth = await this.googleAuthService.authorize();
 			const { replacements, docName } = requestData;
 
 			if (!replacements || typeof replacements !== 'object') {

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { google } from 'googleapis';
-import { GoogleAuth, OAuth2Client } from 'google-auth-library';
+import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs';
 import * as readline from 'readline';
 import { GoogleCredentials, GoogleTokens } from './types/index';
@@ -10,7 +10,7 @@ import { GOOGLE_CONFIG } from '../config';
 export class GoogleAuthService {
 	private logger = new Logger(GoogleAuthService.name);
 
-	async authorize(): Promise<any> {
+	async authorize(): Promise<OAuth2Client> {
 		this.logger.log('Starting Authorization...');
 
 		const credentials: GoogleCredentials = JSON.parse(
@@ -49,6 +49,7 @@ export class GoogleAuthService {
 
 		return oAuth2Client;
 	}
+
 	private getNewToken(oAuth2Client: OAuth2Client): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const authUrl = oAuth2Client.generateAuthUrl({
@@ -99,14 +100,14 @@ export class GoogleAuthService {
 		});
 	}
 
-	getDrive(auth: GoogleAuth) {
+	getDrive(auth: OAuth2Client) {
 		return google.drive({
 			version: GOOGLE_CONFIG.API_VERSIONS.DRIVE,
 			auth,
 		});
 	}
 
-	getDocs(auth: GoogleAuth) {
+	getDocs(auth: OAuth2Client) {
 		return google.docs({ version: GOOGLE_CONFIG.API_VERSIONS.DOCS, auth });
 	}
 }
