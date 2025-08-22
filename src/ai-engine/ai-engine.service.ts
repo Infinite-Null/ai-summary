@@ -1,30 +1,16 @@
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import {
-	AIMessageChunk,
-	HumanMessage,
-	SystemMessage,
-} from '@langchain/core/messages';
 import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { ChatOpenAI } from '@langchain/openai';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Document } from 'langchain/document';
 import { Langfuse, TextPromptClient } from 'langfuse';
 import { GithubService } from 'src/github/github.service';
 import { GoogleDocService } from 'src/google-doc/google-doc.service';
 import { SlackService } from 'src/slack/slack.service';
-import {
-	GoogleModels,
-	ModelProvider,
-	OpenAIModels,
-	QuickAskDTO,
-	SupportedModels,
-} from './dto/quick-ask.dto';
 import { SummarizeDTO } from './dto/summarize-dto';
-import { FORMAT, QUICK_ASK_SYSTEM_PROMPT } from './prompts';
+import { FORMAT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
 import { ProjectSummarySchema } from './types/output';
+import { ModelFactoryService } from 'src/model-factory/model-factory.service';
 
 @Injectable()
 export class AiEngineService {
@@ -51,6 +37,7 @@ export class AiEngineService {
 	private prompt: TextPromptClient;
 
 	constructor(
+		private readonly modelFactoryService: ModelFactoryService,
 		private readonly mapReduceService: MapReduceService,
 		private readonly stuffService: StuffService,
 		private readonly slackService: SlackService,
@@ -62,45 +49,6 @@ export class AiEngineService {
 			secretKey: process.env.LANGFUSE_SECRET_KEY,
 			baseUrl: process.env.LANGFUSE_BASE_URL,
 		});
-	}
-
-	/**
-	 * Creates an instance of the AI model.
-	 *
-	 * @param provider - The model provider to use (OpenAI or Google).
-	 * @param model - The model to use for the AI engine.
-	 * @param temperature - The temperature setting for the model.
-	 * @returns An instance of the model or an error if the provider is not supported.
-	 */
-	createModelInstance(
-		provider: ModelProvider = ModelProvider.OPENAI,
-		model: SupportedModels = OpenAIModels.GPT_3_5_TURBO,
-		temperature: number = 0.7,
-	): BaseChatModel {
-		if (!this.validateModel(provider, model)) {
-			throw new BadRequestException(
-				`Unsupported model ${model} for provider ${provider}.`,
-			);
-		}
-
-		if (provider === ModelProvider.GOOGLE) {
-			return new ChatGoogleGenerativeAI({
-				model,
-				temperature,
-			});
-		}
-
-		// Fallback to the default provider (OpenAI).
-		return new ChatOpenAI({ model, temperature });
-	}
-
-	validateModel(provider: ModelProvider, model: SupportedModels): boolean {
-		if (provider === ModelProvider.OPENAI) {
-			return Object.values(OpenAIModels).includes(model as OpenAIModels);
-		} else if (provider === ModelProvider.GOOGLE) {
-			return Object.values(GoogleModels).includes(model as GoogleModels);
-		}
-		return false;
 	}
 
 	structureResponse(
@@ -126,59 +74,6 @@ export class AiEngineService {
 			},
 			docName,
 		};
-	}
-
-	/**
-	 * Processes a quick ask query and returns a response.
-	 *
-	 * @param quickAskDto - The DTO containing the user's query and model/provider details.
-	 * @returns A response from the AI engine.
-	 */
-	async quickAsk({
-		provider,
-		userQuery,
-		model,
-		temperature,
-	}: QuickAskDTO): Promise<AIMessageChunk> {
-		const messages = [
-			new SystemMessage(QUICK_ASK_SYSTEM_PROMPT),
-			new HumanMessage(userQuery),
-		];
-
-		const trace = this.langfuse.trace({
-			name: 'ai-poc',
-			metadata: {
-				provider,
-				userQuery,
-				model,
-				temperature,
-			},
-		});
-
-		const modelInstance = this.createModelInstance(
-			provider,
-			model,
-			temperature,
-		);
-
-		const generation = trace.generation({
-			name: `${provider}-${model}-generation`,
-			model: model || 'gpt-3.5-turbo',
-			input: { messages: userQuery },
-			modelParameters: {
-				temperature: temperature || 0.7,
-			},
-		});
-
-		const response = await modelInstance.invoke(messages);
-
-		generation.end({
-			output: response.content,
-		});
-
-		await this.langfuse.shutdownAsync();
-
-		return response;
 	}
 
 	/**
@@ -210,7 +105,11 @@ export class AiEngineService {
 		});
 
 		this.prompt = await this.langfuse.getPrompt('ai-summary-poc');
-		const llm = this.createModelInstance(provider, model, temperature);
+		const llm = this.modelFactoryService.createModelInstance(
+			provider,
+			model,
+			temperature,
+		);
 
 		// Format dates to readable format (DD MMM YYYY)
 		const formatDate = (dateString: string) => {

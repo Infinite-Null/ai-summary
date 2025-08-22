@@ -1,5 +1,3 @@
-export const QUICK_ASK_SYSTEM_PROMPT = `You are a helpful AI assistant. Your task is to answer user queries based on the provided model and provider.`;
-
 export const FORMAT = `
 {{
     "summary": "A comprehensive narrative summary of the project's current state, key accomplishments, and overall progress. This should be 34 paragraphs providing a complete overview of where the project stands, what has been achieved, and what is currently happening. Include specific details about deliverables, milestones, and current focus areas.\\n\\nUse proper paragraph breaks between sections for readability.",

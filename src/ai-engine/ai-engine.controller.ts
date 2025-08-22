@@ -1,7 +1,6 @@
 import { Body, Controller, Post, ValidationPipe } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AiEngineService } from './ai-engine.service';
-import { QuickAskDTO } from './dto/quick-ask.dto';
 import { SummarizeDTO } from './dto/summarize-dto';
 
 /**
@@ -22,11 +21,6 @@ import { SummarizeDTO } from './dto/summarize-dto';
 })
 export class AiEngineController {
 	constructor(private readonly aiEngineService: AiEngineService) {}
-
-	@Post('/quick-ask')
-	quickAsk(@Body(new ValidationPipe()) quickAskDto: QuickAskDTO) {
-		return this.aiEngineService.quickAsk(quickAskDto);
-	}
 
 	@Post('/summarize')
 	summarize(@Body(new ValidationPipe()) summarizeDto: SummarizeDTO) {

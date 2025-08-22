@@ -6,15 +6,15 @@ import {
 	Min,
 	ValidateNested,
 } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { GitHubQueryDTO } from './github-query-dto';
 import {
 	GoogleModels,
 	ModelProvider,
 	OpenAIModels,
 	type SupportedModels,
-} from './quick-ask.dto';
-import { ApiProperty } from '@nestjs/swagger';
-import { GitHubQueryDTO } from './github-query-dto';
-import { Type } from 'class-transformer';
+} from '../types';
 
 export class SummarizeDTO {
 	@IsOptional()
