@@ -12,7 +12,7 @@ import {
 	RecursiveCharacterTextSplitter,
 	TokenTextSplitter,
 } from 'langchain/text_splitter';
-import { LangfuseTraceClient } from 'langfuse';
+import { LangfuseTraceClient, TextPromptClient } from 'langfuse';
 import { ProjectSummarySchema } from '../types/output';
 
 interface SummaryState {
@@ -67,6 +67,10 @@ export class MapReduceService {
 	private temperature: number = 0.7;
 	private totalTokens: number = 0;
 
+	private promptTemplate: TextPromptClient;
+	private mapTemplate: TextPromptClient;
+	private reduceTemplate: TextPromptClient;
+
 	private initialize(
 		llm: BaseChatModel,
 		mapPrompt: ChatPromptTemplate,
@@ -78,6 +82,9 @@ export class MapReduceService {
 		model: string = 'gpt-3.5-turbo',
 		temperature: number = 0.7,
 		totalTokens: number = 0,
+		promptTemplate: TextPromptClient,
+		mapTemplate: TextPromptClient,
+		reduceTemplate: TextPromptClient,
 	) {
 		this.llm = llm;
 		this.mapPrompt = mapPrompt;
@@ -90,6 +97,9 @@ export class MapReduceService {
 		this.model = model;
 		this.temperature = temperature;
 		this.totalTokens = totalTokens;
+		this.promptTemplate = promptTemplate;
+		this.mapTemplate = mapTemplate;
+		this.reduceTemplate = reduceTemplate;
 	}
 
 	/**
@@ -119,6 +129,9 @@ export class MapReduceService {
 		model: string = 'gpt-3.5-turbo',
 		temperature: number = 0.7,
 		totalTokens: number = 0,
+		promptTemplate: TextPromptClient,
+		mapTemplate: TextPromptClient,
+		reduceTemplate: TextPromptClient,
 		chunkSize: number = 75_000, // default 20_000
 		chunkOverlap: number = 0,
 		maxTokens: number = 500_000, // default 90_000
@@ -140,6 +153,9 @@ export class MapReduceService {
 			model,
 			temperature,
 			totalTokens,
+			promptTemplate,
+			mapTemplate,
+			reduceTemplate,
 		);
 
 		let splitDocuments: Document[] = [];
@@ -208,7 +224,24 @@ export class MapReduceService {
 			docs: input,
 		});
 
+		const generation = this.trace.generation({
+			name: `${this.provider}-${this.model}-generation`,
+			model: this.model,
+			prompt: this.reduceTemplate,
+			input: { messages: prompt },
+			modelParameters: {
+				temperature: this.temperature || 0.7,
+			},
+			metadata: {
+				totalTokens: this.totalTokens,
+				algorithm: 'map-reduce',
+				type: 'reduce',
+			},
+		});
+
 		const response = await this.llm.invoke(prompt);
+
+		generation.end({ output: response.content });
 
 		return String(
 			typeof response.content === 'object'
@@ -249,6 +282,7 @@ export class MapReduceService {
 		const generation = this.trace.generation({
 			name: `${this.provider}-${this.model}-generation`,
 			model: this.model,
+			prompt: this.mapTemplate,
 			input: { messages: prompt },
 			modelParameters: {
 				temperature: this.temperature || 0.7,
@@ -256,6 +290,7 @@ export class MapReduceService {
 			metadata: {
 				totalTokens: this.totalTokens,
 				algorithm: 'map-reduce',
+				type: 'map',
 			},
 		});
 
@@ -303,12 +338,14 @@ export class MapReduceService {
 		const generation = this.trace.generation({
 			name: `final-${this.provider}-${this.model}-generation`,
 			model: this.model,
+			prompt: this.promptTemplate,
 			modelParameters: {
 				temperature: this.temperature || 0.7,
 			},
 			metadata: {
 				totalTokens: this.totalTokens,
 				algorithm: 'map-reduce',
+				type: 'final',
 			},
 		});
 
