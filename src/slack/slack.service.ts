@@ -10,6 +10,10 @@ import {
 } from './types';
 import { Channel } from '@slack/web-api/dist/types/response/ConversationsListResponse';
 
+/**
+ * Service for interacting with Slack API, fetching standup messages, formatting them, and extracting user and thread information.
+ * Handles channel lookup, message retrieval, reply threading, and parsing standup formats for downstream summarization and reporting.
+ */
 @Injectable()
 export class SlackService {
 	/**
@@ -19,8 +23,15 @@ export class SlackService {
 		timestamp: true,
 	});
 
+	/**
+	 * Slack WebClient instance for API calls.
+	 */
 	private readonly client: WebClient;
 
+	/**
+	 * Initializes the SlackService with a WebClient using the bot token from environment variables.
+	 * @throws Error if SLACK_BOT_TOKEN is not set.
+	 */
 	constructor() {
 		const token = process.env.SLACK_BOT_TOKEN;
 		if (!token) {
@@ -32,10 +43,11 @@ export class SlackService {
 	}
 
 	/**
-	 * Converts a channel name to its ID by querying the Slack API
-	 * @param channelName The name of the channel (without the # prefix)
-	 * @returns The channel ID
-	 * @throws Error if channel is not found or API call fails
+	 * Converts a channel name to its ID by querying the Slack API.
+	 *
+	 * @param channelName - The name of the channel (without the # prefix).
+	 * @returns The channel ID string.
+	 * @throws NotFoundException if channel is not found, or Error if API call fails.
 	 */
 	async getChannelId(channelName: string): Promise<string> {
 		try {
@@ -71,6 +83,15 @@ export class SlackService {
 		}
 	}
 
+	/**
+	 * Fetches all messages from a Slack channel within an optional date range.
+	 *
+	 * @param channelId - The Slack channel ID.
+	 * @param startDate - Optional start date (ISO string).
+	 * @param endDate - Optional end date (ISO string).
+	 * @returns Array of SlackMessage objects.
+	 * @throws Error if Slack API call fails.
+	 */
 	async getMessages(
 		channelId: string,
 		startDate?: string,
@@ -122,6 +143,12 @@ export class SlackService {
 		}
 	}
 
+	/**
+	 * Filters Slack messages to extract only standup bot messages.
+	 *
+	 * @param messages - Array of SlackMessage objects.
+	 * @returns Array of SlackMessage objects that are standup bot messages.
+	 */
 	extractStandupMessages(messages: SlackMessage[]): SlackMessage[] {
 		return messages.filter((msg) => {
 			return (
@@ -131,6 +158,12 @@ export class SlackService {
 		});
 	}
 
+	/**
+	 * Retrieves Slack user information (username and real name) for a given user ID.
+	 *
+	 * @param userId - Slack user ID string.
+	 * @returns SlackUser object or null if not found.
+	 */
 	async getUserInfo(userId: string): Promise<SlackUser | null> {
 		try {
 			const result = await this.client.users.info({ user: userId });
@@ -156,11 +189,13 @@ export class SlackService {
 	}
 
 	/**
-	 * Retrieves replies to a specific message in a thread
-	 * @param channelId The ID of the channel containing the thread
-	 * @param threadTs The timestamp of the parent message
-	 * @param options Optional parameters for pagination and filtering
-	 * @returns Array of reply messages in the thread
+	 * Retrieves replies to a specific message in a thread.
+	 *
+	 * @param channelId - The ID of the channel containing the thread.
+	 * @param threadTs - The timestamp of the parent message.
+	 * @param options - Optional parameters for pagination and filtering.
+	 * @returns Array of reply SlackMessage objects in the thread.
+	 * @throws Error if Slack API call fails.
 	 */
 	async getMessageReplies(
 		channelId: string,
@@ -234,6 +269,12 @@ export class SlackService {
 		}
 	}
 
+	/**
+	 * Formats standup messages and their replies into a structured FormattedStandup object.
+	 *
+	 * @param standupMessagesWithReplies - Array of SlackMessage objects with attached replies.
+	 * @returns FormattedStandup object mapping timestamps to valid standup entries.
+	 */
 	private formatStandup(
 		standupMessagesWithReplies: Array<
 			SlackMessage & { replies?: SlackMessage[] }
@@ -277,6 +318,12 @@ export class SlackService {
 		return formatted;
 	}
 
+	/**
+	 * Parses a standup message string into its component sections: yesterday, today, blockers.
+	 *
+	 * @param standup - Raw standup message string.
+	 * @returns ParsedStandup object with arrays for each section and the raw text.
+	 */
 	parseStandup(standup: string): ParsedStandup {
 		try {
 			// Split the text by the known question strings
@@ -320,6 +367,12 @@ export class SlackService {
 		}
 	}
 
+	/**
+	 * Retrieves and formats standup entries from a Slack channel within a date range.
+	 *
+	 * @param params - FetchStandupParams object containing channelName, startDate, endDate.
+	 * @returns FormattedStandup object mapping timestamps to valid standup entries.
+	 */
 	async getStandups(params: FetchStandupParams): Promise<FormattedStandup> {
 		const channelId = await this.getChannelId(params.channelName);
 
