@@ -132,9 +132,9 @@ export class MapReduceService {
 		promptTemplate: TextPromptClient,
 		mapTemplate: TextPromptClient,
 		reduceTemplate: TextPromptClient,
-		chunkSize: number = 75_000, // default 20_000
+		chunkSize: number = 16_000, // default 16_000
 		chunkOverlap: number = 0,
-		maxTokens: number = 500_000, // default 90_000
+		maxTokens: number = 500_000, // default 500_000
 	): Promise<ProjectSummarySchema> {
 		/**
 		 * Initializes shared state.
