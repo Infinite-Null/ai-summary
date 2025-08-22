@@ -235,11 +235,7 @@ Context:
 		temperature,
 		algorithm,
 		slackData,
-		startDate,
-		endDate,
-		projectName,
-		docName,
-		projectStatus,
+		metadata,
 		githubData,
 	}: SummarizeDTO) {
 		const trace = this.langfuse.trace({
@@ -250,6 +246,9 @@ Context:
 				temperature,
 			},
 		});
+
+		const { startDate, endDate, projectName, projectStatus, docName } =
+			metadata;
 
 		const llm = this.createModelInstance(provider, model, temperature);
 
