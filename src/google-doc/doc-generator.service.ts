@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GoogleAuth } from 'google-auth-library';
+import { OAuth2Client } from 'google-auth-library';
 import { GoogleAuthService } from './google-auth.service';
 import { BatchUpdateRequest } from './types/index';
 import { getTemplateTag, TEMPLATE_CONFIG } from 'src/config';
@@ -11,7 +11,7 @@ export class DocGeneratorService {
 	constructor(private readonly googleAuthService: GoogleAuthService) {}
 
 	async createDocFromTemplate(
-		auth: GoogleAuth,
+		auth: OAuth2Client,
 		replacements: Record<string, string | string[]>,
 		outputName: string,
 	): Promise<string> {
