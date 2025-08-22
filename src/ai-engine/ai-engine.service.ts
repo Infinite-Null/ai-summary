@@ -366,31 +366,20 @@ export class AiEngineService {
 		// Else, fall back to the map-reduce summarization method.
 		this.logger.log('Running map-reduce summarization algorithm');
 
+		const mapTemplate = await this.langfuse.getPrompt(
+			'AI-Internal POC map prompt',
+		);
+
 		const mapPrompt = ChatPromptTemplate.fromMessages([
-			[
-				'user',
-				`Write a concise summary of the following with task categorization focusing on project progress and achievements:
-				\n\nRULES:
-                - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
-                - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
-                - In Review: Tasks under review, awaiting approval, or in pull request/code review process
-                - Identify main project areas and group related tasks under descriptive titles
-                - Include specific details like PR numbers, technical specifics, and accomplishments
-                - Focus on project deliverables, milestones, and current work status
-				- Any Blockers: Tasks that are blocked by external factors, dependencies, or waiting on input
-				\n\n{context}`,
-			],
+			['user', mapTemplate.compile()],
 		]);
 
-		const reduceTemplate = `
-			The following is a set of summaries:
-			{docs}
-			Take these and distill it into a final, consolidated summary
-			of the main themes.
-		`;
+		const reduceTemplate = await this.langfuse.getPrompt(
+			'AI-Internal Reduce Template',
+		);
 
 		const reducePrompt = ChatPromptTemplate.fromMessages([
-			['user', reduceTemplate],
+			['user', reduceTemplate.compile()],
 		]);
 
 		const finalPrompt = PromptTemplate.fromTemplate(this.compiledPrompt());
