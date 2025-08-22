@@ -1,4 +1,4 @@
-export interface FetchMessagesParams {
+export interface FetchStandupParams {
 	channelName: string;
 	startDate: string;
 	endDate: string;

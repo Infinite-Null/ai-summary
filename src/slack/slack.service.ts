@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConversationsHistoryResponse, WebClient } from '@slack/web-api';
 import {
-	FetchMessagesParams,
+	FetchStandupParams,
 	FormattedStandup,
 	ParsedStandup,
 	SlackMessage,
@@ -55,7 +55,9 @@ export class SlackService {
 			);
 
 			if (!channel || !channel.id) {
-				throw new Error(`Channel #${cleanChannelName} not found`);
+				throw new NotFoundException(
+					`Channel #${cleanChannelName} not found`,
+				);
 			}
 
 			return channel.id;
@@ -318,7 +320,7 @@ export class SlackService {
 		}
 	}
 
-	async getStandups(params: FetchMessagesParams): Promise<FormattedStandup> {
+	async getStandups(params: FetchStandupParams): Promise<FormattedStandup> {
 		const channelId = await this.getChannelId(params.channelName);
 
 		const messages = await this.getMessages(

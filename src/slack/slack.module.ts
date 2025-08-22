@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { SlackService } from './slack.service';
 import { ConfigModule } from '@nestjs/config';
-import { SlackTestController } from './slack-test.controller';
+import { SlackTestController } from './slack.controller';
 
 @Module({
 	imports: [ConfigModule],
-	controllers: [SlackTestController], // Temporary controller for testing
+	controllers: [SlackTestController],
 	providers: [SlackService],
 	exports: [SlackService],
 })
