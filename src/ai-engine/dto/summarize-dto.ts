@@ -17,6 +17,7 @@ import { GitHubQueryDTO } from './github-query-dto';
 import { Type } from 'class-transformer';
 import { SlackQueryDTO } from './slack-query-dto';
 import { MetadataQueryDTO } from './metadata-query-dto';
+import { Algorithm } from '../types';
 
 export class SummarizeDTO {
 	@IsOptional()
@@ -54,14 +55,14 @@ export class SummarizeDTO {
 	temperature: number;
 
 	@IsOptional()
-	@IsEnum(['map-reduce', 'stuff', 'auto'])
+	@IsEnum(Algorithm)
 	@ApiProperty({
 		description: 'The summarization algorithm to use.',
 		default: 'auto',
-		enum: ['map-reduce', 'stuff', 'auto'],
+		enum: Algorithm,
 		example: 'auto',
 	})
-	algorithm: 'map-reduce' | 'stuff' | 'auto';
+	algorithm: Algorithm;
 
 	@IsOptional()
 	@ValidateNested()

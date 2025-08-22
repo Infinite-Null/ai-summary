@@ -24,7 +24,7 @@ import { SummarizeDTO } from './dto/summarize-dto';
 import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
-import { ProjectSummarySchema } from './types/output';
+import { ProjectSummarySchema, Algorithm } from './types';
 
 @Injectable()
 export class AiEngineService {
@@ -270,9 +270,9 @@ Context:
 			: formatDate('2025-08-18T17:30:04.549Z');
 
 		const standupData = await this.slackService.getStandups({
-			channelName: slackData.channelName || 'proj-ai-internal',
-			startDate: startDate || '2025-08-18T01:30:04.549Z',
-			endDate: endDate || '2025-08-18T17:30:04.549Z',
+			channelName: slackData.channelName,
+			startDate: startDate,
+			endDate: endDate,
 		});
 
 		/**
@@ -339,8 +339,8 @@ Context:
 
 		// If the total number of tokens is less than the maximum allowed, use the "stuff" summarization method.
 		if (
-			algorithm === 'stuff' ||
-			(algorithm === 'auto' && totalTokens < this.MAX_TOKENS)
+			algorithm === Algorithm.Stuff ||
+			(algorithm === Algorithm.Auto && totalTokens < this.MAX_TOKENS)
 		) {
 			this.logger.log('Running stuff summarization algorithm');
 

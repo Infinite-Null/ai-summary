@@ -13,7 +13,7 @@ import {
 	TokenTextSplitter,
 } from 'langchain/text_splitter';
 import { LangfuseTraceClient } from 'langfuse';
-import { ProjectSummarySchema } from '../types/output';
+import { ProjectSummarySchema } from '../types';
 
 interface SummaryState {
 	content: string;
