@@ -84,14 +84,11 @@ export class GithubService {
 		todate: string,
 		projectboard: string,
 	): Promise<Issue[]> {
-		const nonBlockedIssueGQLQuery = getFetchIssueQueryWitDateRange();
-		const blockedIssueGQLQuery = getFetchIssueQueryWitDateRange(true);
-		const nonBlockedIssueSearchQuery = `repo:${owner}/${repo} -label:Blocked is:issue updated:${this.formatToYYMMDD(fromdate)}..${this.formatToYYMMDD(todate)}`;
-		const blockedIssueSearchQuery = `repo:${owner}/${repo} label:Blocked is:issue updated:${this.formatToYYMMDD(fromdate)}..${this.formatToYYMMDD(todate)}`;
+		const nonBlockedIssueGQLQuery = getFetchIssueQueryWitDateRange(true);
+		const nonBlockedIssueSearchQuery = `repo:${owner}/${repo} is:issue updated:${this.formatToYYMMDD(fromdate)}..${this.formatToYYMMDD(todate)}`;
 
 		let issues: Issue[] = [];
 		let nonBlockedIssueAfterPointer: string | null = null;
-		let blockedIssueAfterPointer: string | null = null;
 
 		while (true) {
 			const response = await this.client.post(
@@ -123,51 +120,38 @@ export class GithubService {
 			nonBlockedIssueAfterPointer = pageInfo.endCursor;
 		}
 
-		while (true) {
-			const response = await this.client.post(
-				this.GITHUB_API_GQL_ENDPOINT ?? '',
-				{
-					query: blockedIssueGQLQuery,
-					variables: {
-						searchQuery: blockedIssueSearchQuery,
-						after: blockedIssueAfterPointer,
-					},
-				},
-				{ headers: { Authorization: `Bearer ${this.GITHUB_TOKEN}` } },
-			);
+		const processedIssues = issues
+			.map((item) => {
+				const projectItems = item.projectItems.items
+					.filter((e) => e.project?.title === projectboard) // Filter issues by project board name.
+					.map((e) => ({
+						...e,
+						fieldValues: e.fieldValues
+							? {
+									...e.fieldValues,
+									items: e.fieldValues.items.filter(
+										(f) => 'name' in f, // Type guard to ensure 'name' exists to exclude any empty objects.
+									),
+								}
+							: e.fieldValues,
+					}))
+					.filter((e) => e.fieldValues.items.length > 0); // Exclude issues which aren't assigned to any columns.
+				const isBlocked = projectItems.some((item) =>
+					item.fieldValues.items.some(
+						(status) => status.name === 'Blocked',
+					),
+				);
 
-			const data = response.data as GitHubSearchIssueResponse;
+				const { comments, ...rest } = item;
 
-			if (data.errors) {
-				throw new HttpException(data.errors, 500);
-			}
+				return {
+					...rest,
+					projectItems: { ...item.projectItems, items: projectItems },
+					...(isBlocked ? { comments: comments } : {}), // Include comments property only for blocked issues.
+				};
+			})
+			.filter((item) => item.projectItems.items.length > 0); // Exclude issues which aren't assigned to any projects.
 
-			const searchData = data?.data?.search;
-
-			if (!searchData) break;
-
-			issues = issues.concat(searchData.nodes);
-			const pageInfo = searchData.pageInfo;
-			if (!pageInfo.hasNextPage) break;
-
-			blockedIssueAfterPointer = pageInfo.endCursor;
-		}
-
-		issues.forEach((item) => {
-			if (!item.projectItems?.items) return;
-
-			item.projectItems.items = item.projectItems.items.filter((e) => {
-				if (e.project?.title !== projectboard) return false;
-
-				if (e.fieldValues?.items) {
-					e.fieldValues.items = e.fieldValues.items.filter(
-						(f) => 'name' in f,
-					);
-				}
-				return true;
-			});
-		});
-
-		return issues;
+		return processedIssues;
 	}
 }

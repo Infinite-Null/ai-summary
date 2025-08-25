@@ -43,6 +43,29 @@ export interface Issue {
 	projectItems: {
 		items: ProjectItem[];
 	};
+	comments?: Comments;
+}
+
+export interface CommentAuthor {
+	login: string;
+}
+
+export interface CommentItem {
+	author: CommentAuthor;
+	body: string;
+	createdAt: string; // ISO 8601 datetime
+	updatedAt: string; // ISO 8601 datetime
+	url: string;
+}
+
+export interface CommentPageInfo {
+	hasNextPage: boolean;
+	endCursor: string | null;
+}
+
+export interface Comments {
+	pageInfo: CommentPageInfo;
+	items: CommentItem[];
 }
 
 export interface Label {
