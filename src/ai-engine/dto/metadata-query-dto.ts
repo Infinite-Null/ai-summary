@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
+import {
+	IsDateString,
+	IsEnum,
+	IsOptional,
+	IsString,
+	MaxLength,
+	MinLength,
+} from 'class-validator';
 import { ProjectStatus } from '../types';
 
 export class MetadataQueryDTO {
@@ -23,6 +30,8 @@ export class MetadataQueryDTO {
 
 	@IsOptional()
 	@IsString()
+	@MinLength(3)
+	@MaxLength(100)
 	@ApiProperty({
 		description: 'The name of the document to summarize.',
 		default: 'Merge Tags Replacement - New',
