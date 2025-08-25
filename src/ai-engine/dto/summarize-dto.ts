@@ -6,15 +6,15 @@ import {
 	Min,
 	ValidateNested,
 } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { GitHubQueryDTO } from './github-query-dto';
 import {
 	GoogleModels,
 	ModelProvider,
 	OpenAIModels,
 	type SupportedModels,
-} from './quick-ask.dto';
-import { ApiProperty } from '@nestjs/swagger';
-import { GitHubIssueQueryCustomDateRangeDTO } from './github-query-dto';
-import { Type } from 'class-transformer';
+} from '../types';
 
 export class SummarizeDTO {
 	@IsOptional()
@@ -110,11 +110,11 @@ export class SummarizeDTO {
 
 	@IsOptional()
 	@ValidateNested()
-	@Type(() => GitHubIssueQueryCustomDateRangeDTO)
+	@Type(() => GitHubQueryDTO)
 	@ApiProperty({
-		type: GitHubIssueQueryCustomDateRangeDTO,
+		type: GitHubQueryDTO,
 		description: 'GitHub specific data for LLM ingestion.',
 		required: false,
 	})
-	githubData: GitHubIssueQueryCustomDateRangeDTO;
+	githubData: GitHubQueryDTO;
 }

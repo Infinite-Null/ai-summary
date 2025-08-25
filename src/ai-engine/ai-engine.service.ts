@@ -1,30 +1,16 @@
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import {
-	AIMessageChunk,
-	HumanMessage,
-	SystemMessage,
-} from '@langchain/core/messages';
 import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { ChatOpenAI } from '@langchain/openai';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Document } from 'langchain/document';
-import { Langfuse } from 'langfuse';
+import { Langfuse, TextPromptClient } from 'langfuse';
 import { GithubService } from 'src/github/github.service';
-import { SlackService } from 'src/slack/slack.service';
 import { GoogleDocService } from 'src/google-doc/google-doc.service';
-import {
-	GoogleModels,
-	ModelProvider,
-	OpenAIModels,
-	QuickAskDTO,
-	SupportedModels,
-} from './dto/quick-ask.dto';
+import { SlackService } from 'src/slack/slack.service';
 import { SummarizeDTO } from './dto/summarize-dto';
-import { QUICK_ASK_SYSTEM_PROMPT } from './prompts';
+import { FORMAT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
 import { ProjectSummarySchema } from './types/output';
+import { ModelFactoryService } from 'src/model-factory/model-factory.service';
 
 @Injectable()
 export class AiEngineService {
@@ -48,51 +34,10 @@ export class AiEngineService {
 	/**
 	 * Prompt template for project performance report generation.
 	 */
-	private readonly prompt: string = `You are a project management analyst. Analyze the provided team standup data and create a comprehensive project summary report.
-
-CRITICAL INSTRUCTIONS:
-1. ONLY include information explicitly mentioned in the context
-2. Create a comprehensive narrative summary of the project progress
-3. Categorize tasks into completed and in-progress with detailed descriptions
-4. Identify risks, blockers, and actions needed based on the provided data
-5. Format task details with main issue titles followed by bullet points of specific actions
-
-You must respond with a valid JSON object that strictly follows this format:
-{{
-    "summary": "A comprehensive narrative summary of the project's current state, key accomplishments, and overall progress. This should be 3-4 paragraphs providing a complete overview of where the project stands, what has been achieved, and what is currently happening. Include specific details about deliverables, milestones, and current focus areas.\\n\\nUse proper paragraph breaks between sections for readability.",
-    "riskBlockerActionNeeded": "Detailed description of any risks, blockers, or critical actions that need immediate attention. If there are no explicit blockers mentioned, state 'No explicit blockers reported.' Include specific action items, dependencies, and any issues that could impact project timeline or success.\\n\\nUse line breaks between different risk categories or action items.",
-    "taskDetails": {{
-        "completed": "Format as: Main Issue Title: Brief description of the completed work.\\n\\t- Specific action item completed\\n\\t- Another specific action item completed\\n\\t- Additional completed task details\\n\\nRepeat this format for each major completed area. Include PR numbers, issue references, and specific achievements.\\n\\nExample format:\\nFeature Development: Core functionality implementation\\n\\t- API endpoints created and tested\\n\\t- Database schema updated\\n\\t- Unit tests added",
-        "inProgress": "Format as: Main Issue Title: Brief description of ongoing work.\\n\\t- Current task being worked on\\n\\t- Another ongoing task\\n\\t- Status of current work\\n\\nRepeat this format for each major in-progress area. Include current status, next steps, and any dependencies.\\n\\nExample format:\\nUI Development: User interface improvements\\n\\t- Dashboard components in development\\n\\t- User authentication flow being refined\\n\\t- Responsive design adjustments ongoing",
-        "inReview": "Format as: Main Issue Title: Brief description of work under review.\\n\\t- Pull request or deliverable under review\\n\\t- Code review or approval process\\n\\t- Documentation or design review status\\n\\nRepeat this format for each major review area. Include PR numbers, reviewer information, and review status when available. If there are no explicit in review, state 'Nothing is in review.'\\n\\nExample format:\\nCode Review: Backend improvements under review\\n\\t- PR #123 awaiting senior developer review\\n\\t- Security audit documentation pending approval\\n\\t- Performance optimization changes being tested"
-    }}
-}}
-
-CONTENT GUIDELINES:
-- Summary: Should read like a professional project status report narrative with proper paragraph breaks using \\n\\n
-- Risk/Blockers: Focus on actionable items that need attention or resolution, separated by line breaks \\n
-- Completed Tasks: Group related completed work under descriptive main titles with tabbed bullet points using \\n\\t-
-- In-Progress Tasks: Group ongoing work under descriptive main titles with tabbed bullet points using \\n\\t-
-- In-Review Tasks: Group work under review under descriptive main titles with tabbed bullet points using \\n\\t-
-
-FORMATTING RULES:
-- Use only double quotes for JSON keys and string values
-- Escape any double quotes within string values using backslash
-- Use \\n for new lines and \\t for tabs in formatted content
-- For nested bullet points, use \\n\\t\\t- for sub-items under main bullet points
-- Keep descriptions clear and professional
-- Include specific details like PR numbers, dates, and technical specifics when mentioned
-- Use bullet points (-) for individual task items within each main category, properly tabbed with \\t
-- Each main issue title should be followed by a colon and brief description
-- Maintain professional tone throughout
-- Separate different sections and categories with proper line breaks (\\n\\n)
-
-Context:
-{context}
-
-{format_instructions}`;
+	private prompt: TextPromptClient;
 
 	constructor(
+		private readonly modelFactoryService: ModelFactoryService,
 		private readonly mapReduceService: MapReduceService,
 		private readonly stuffService: StuffService,
 		private readonly slackService: SlackService,
@@ -104,45 +49,6 @@ Context:
 			secretKey: process.env.LANGFUSE_SECRET_KEY,
 			baseUrl: process.env.LANGFUSE_BASE_URL,
 		});
-	}
-
-	/**
-	 * Creates an instance of the AI model.
-	 *
-	 * @param provider - The model provider to use (OpenAI or Google).
-	 * @param model - The model to use for the AI engine.
-	 * @param temperature - The temperature setting for the model.
-	 * @returns An instance of the model or an error if the provider is not supported.
-	 */
-	createModelInstance(
-		provider: ModelProvider = ModelProvider.OPENAI,
-		model: SupportedModels = OpenAIModels.GPT_3_5_TURBO,
-		temperature: number = 0.7,
-	): BaseChatModel {
-		if (!this.validateModel(provider, model)) {
-			throw new BadRequestException(
-				`Unsupported model ${model} for provider ${provider}.`,
-			);
-		}
-
-		if (provider === ModelProvider.GOOGLE) {
-			return new ChatGoogleGenerativeAI({
-				model,
-				temperature,
-			});
-		}
-
-		// Fallback to the default provider (OpenAI).
-		return new ChatOpenAI({ model, temperature });
-	}
-
-	validateModel(provider: ModelProvider, model: SupportedModels): boolean {
-		if (provider === ModelProvider.OPENAI) {
-			return Object.values(OpenAIModels).includes(model as OpenAIModels);
-		} else if (provider === ModelProvider.GOOGLE) {
-			return Object.values(GoogleModels).includes(model as GoogleModels);
-		}
-		return false;
 	}
 
 	structureResponse(
@@ -159,7 +65,7 @@ Context:
 				from,
 				to,
 				projectStatus,
-				summary: response?.summary ?? '',
+				summary: response?.summary?.replaceAll('\n\n', '\n') ?? '',
 				riskBlockerActionNeeded:
 					response?.riskBlockerActionNeeded ?? '',
 				completed: response?.taskDetails?.completed ?? '',
@@ -168,59 +74,6 @@ Context:
 			},
 			docName,
 		};
-	}
-
-	/**
-	 * Processes a quick ask query and returns a response.
-	 *
-	 * @param quickAskDto - The DTO containing the user's query and model/provider details.
-	 * @returns A response from the AI engine.
-	 */
-	async quickAsk({
-		provider,
-		userQuery,
-		model,
-		temperature,
-	}: QuickAskDTO): Promise<AIMessageChunk> {
-		const messages = [
-			new SystemMessage(QUICK_ASK_SYSTEM_PROMPT),
-			new HumanMessage(userQuery),
-		];
-
-		const trace = this.langfuse.trace({
-			name: 'ai-poc',
-			metadata: {
-				provider,
-				userQuery,
-				model,
-				temperature,
-			},
-		});
-
-		const modelInstance = this.createModelInstance(
-			provider,
-			model,
-			temperature,
-		);
-
-		const generation = trace.generation({
-			name: `${provider}-${model}-generation`,
-			model: model || 'gpt-3.5-turbo',
-			input: { messages: userQuery },
-			modelParameters: {
-				temperature: temperature || 0.7,
-			},
-		});
-
-		const response = await modelInstance.invoke(messages);
-
-		generation.end({
-			output: response.content,
-		});
-
-		await this.langfuse.shutdownAsync();
-
-		return response;
 	}
 
 	/**
@@ -251,7 +104,12 @@ Context:
 			},
 		});
 
-		const llm = this.createModelInstance(provider, model, temperature);
+		this.prompt = await this.langfuse.getPrompt('ai-summary-poc');
+		const llm = this.modelFactoryService.createModelInstance(
+			provider,
+			model,
+			temperature,
+		);
 
 		// Format dates to readable format (DD MMM YYYY)
 		const formatDate = (dateString: string) => {
@@ -347,11 +205,16 @@ Context:
 		) {
 			this.logger.log('Running stuff summarization algorithm');
 
-			const prompt = PromptTemplate.fromTemplate(this.prompt);
+			const prompt = PromptTemplate.fromTemplate(
+				this.prompt.compile({
+					format: FORMAT,
+				}),
+			);
 
 			const generation = trace.generation({
 				name: `${provider}-${model}-generation`,
 				model: model,
+				prompt: this.prompt,
 				input: { messages: prompt },
 				modelParameters: {
 					temperature: temperature || 0.7,
@@ -369,6 +232,7 @@ Context:
 			});
 
 			await this.langfuse.shutdownAsync();
+
 			const finalStructuredResponse = this.structureResponse(
 				result,
 				projectName,
@@ -392,34 +256,27 @@ Context:
 		// Else, fall back to the map-reduce summarization method.
 		this.logger.log('Running map-reduce summarization algorithm');
 
+		const mapTemplate = await this.langfuse.getPrompt(
+			'ai-summary-map-template',
+		);
+
 		const mapPrompt = ChatPromptTemplate.fromMessages([
-			[
-				'user',
-				`Write a concise summary of the following with task categorization focusing on project progress and achievements:
-				\n\nRULES:
-                - Completed: Tasks explicitly marked as done, merged, accomplished, or finished
-                - In Progress: Tasks with ongoing work, research, investigation, or continuation mentioned
-                - In Review: Tasks under review, awaiting approval, or in pull request/code review process
-                - Identify main project areas and group related tasks under descriptive titles
-                - Include specific details like PR numbers, technical specifics, and accomplishments
-                - Focus on project deliverables, milestones, and current work status
-				- Any Blockers: Tasks that are blocked by external factors, dependencies, or waiting on input
-				\n\n{context}`,
-			],
+			['user', mapTemplate.compile()],
 		]);
 
-		const reduceTemplate = `
-			The following is a set of summaries:
-			{docs}
-			Take these and distill it into a final, consolidated summary
-			of the main themes.
-		`;
+		const reduceTemplate = await this.langfuse.getPrompt(
+			'ai-summary-reduce-template',
+		);
 
 		const reducePrompt = ChatPromptTemplate.fromMessages([
-			['user', reduceTemplate],
+			['user', reduceTemplate.compile()],
 		]);
 
-		const finalPrompt = PromptTemplate.fromTemplate(this.prompt);
+		const finalPrompt = PromptTemplate.fromTemplate(
+			this.prompt.compile({
+				format: FORMAT,
+			}),
+		);
 
 		const response = await this.mapReduceService.summarize(
 			llm,
@@ -432,6 +289,9 @@ Context:
 			model,
 			temperature,
 			totalTokens,
+			this.prompt,
+			mapTemplate,
+			reduceTemplate,
 		);
 
 		await this.langfuse.shutdownAsync();

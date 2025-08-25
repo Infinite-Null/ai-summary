@@ -6,9 +6,10 @@ import { StuffService } from './summarization-algorithm/stuff.service';
 import { SlackModule } from 'src/slack/slack.module';
 import { GithubModule } from 'src/github/github.module';
 import { GoogleDocModule } from 'src/google-doc/google-doc.module';
+import { ModelFactoryModule } from 'src/model-factory/model-factory.module';
 
 @Module({
-	imports: [SlackModule, GithubModule, GoogleDocModule],
+	imports: [ModelFactoryModule, SlackModule, GithubModule, GoogleDocModule],
 	controllers: [AiEngineController],
 	providers: [AiEngineService, MapReduceService, StuffService],
 })
