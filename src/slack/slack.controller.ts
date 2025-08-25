@@ -6,7 +6,7 @@ import { FetchStandupsResponseDto } from './dto/fetch-standups-response.dto';
 
 @ApiTags('Slack')
 @Controller('slack')
-export class SlackTestController {
+export class SlackController {
 	constructor(private readonly slackService: SlackService) {}
 
 	@Get('get-standups')
