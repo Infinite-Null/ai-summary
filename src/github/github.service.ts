@@ -1,15 +1,9 @@
 import { Injectable, HttpException } from '@nestjs/common';
 import { AxiosInstance } from 'axios';
 import { HttpService } from '@nestjs/axios';
-import {
-	GithubIssuesResponse,
-	Issue,
-	GitHubSearchIssueResponse,
-} from './types/output';
-import {
-	getFetchIssueQuery,
-	getFetchIssueQueryWitDateRange,
-} from './queries/graphql';
+import { Issue, GitHubSearchIssueResponse } from './types/output';
+import { getFetchIssueQuery } from './queries/graphql';
+import { formatToYYMMDD } from '../common/utils/object-utils';
 
 @Injectable()
 export class GithubService {
@@ -26,16 +20,6 @@ export class GithubService {
 		this.client = this.httpService.axiosRef;
 	}
 
-	private formatToYYMMDD(isoString: string): string {
-		const date = new Date(isoString);
-
-		const yy = String(date.getUTCFullYear()).slice();
-		const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-		const dd = String(date.getUTCDate()).padStart(2, '0');
-
-		return `${yy}-${mm}-${dd}`;
-	}
-
 	async fetchIssues(
 		owner: string,
 		repo: string,
@@ -43,8 +27,8 @@ export class GithubService {
 		toDate: string,
 		projectBoard: string,
 	): Promise<Issue[]> {
-		const issueGQLQuery = getFetchIssueQueryWitDateRange(true);
-		const issueSearchQuery = `repo:${owner}/${repo} is:issue updated:${this.formatToYYMMDD(fromDate)}..${this.formatToYYMMDD(toDate)}`;
+		const issueGQLQuery = getFetchIssueQuery(true);
+		const issueSearchQuery = `repo:${owner}/${repo} is:issue updated:${formatToYYMMDD(fromDate)}..${formatToYYMMDD(toDate)}`;
 
 		let issues: Issue[] = [];
 		let nonBlockedIssueAfterPointer: string | null = null;
@@ -101,10 +85,17 @@ export class GithubService {
 					),
 				);
 
-				const { comments, ...rest } = item;
+				const { comments, labels, crossReferencedPRs, ...rest } = item;
 
 				return {
 					...rest,
+					...(labels && labels.items.length > 0
+						? { labels: labels }
+						: {}),
+					...(crossReferencedPRs &&
+					crossReferencedPRs.items.length > 0
+						? { crossReferencedPRs: crossReferencedPRs }
+						: {}),
 					projectItems: { ...item.projectItems, items: projectItems },
 					...(isBlocked ? { comments: comments } : {}), // Include comments property only for blocked issues.
 				};

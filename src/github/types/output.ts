@@ -33,11 +33,11 @@ export interface Issue {
 	url: string;
 	updatedAt: string; // ISO date string
 	closedAt: string | null; // nullable ISO date
-	labels: {
+	labels?: {
 		items: Label[];
 	};
 	milestone: Milestone | null;
-	crossReferencedPRs: {
+	crossReferencedPRs?: {
 		items: CrossReferencedPR[];
 	};
 	projectItems: {
