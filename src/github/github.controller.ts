@@ -11,19 +11,19 @@ export class GithubController {
 	constructor(private readonly githubService: GithubService) {}
 
 	@Get('/issues')
-	getStatusV2(
+	getStatus(
 		@Query('owner') owner: string,
 		@Query('repo') repo: string,
-		@Query('fromdate') fromdate: string,
-		@Query('todate') todate: string,
-		@Query('projectboard') projectboard: string,
+		@Query('fromDate') fromDate: string,
+		@Query('toDate') toDate: string,
+		@Query('projectBoard') projectBoard: string,
 	) {
-		return this.githubService.fetchIssuesWithDateRange(
+		return this.githubService.fetchIssues(
 			owner,
 			repo,
-			fromdate,
-			todate,
-			projectboard,
+			fromDate,
+			toDate,
+			projectBoard,
 		);
 	}
 }

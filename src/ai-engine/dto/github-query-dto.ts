@@ -40,7 +40,7 @@ export class GitHubQueryDTO {
 		default: undefined,
 		example: '2025-08-18T01:30:04.549Z',
 	})
-	fromdate: string;
+	fromDate: string;
 
 	@IsDateString()
 	@ApiProperty({
@@ -49,7 +49,7 @@ export class GitHubQueryDTO {
 		default: undefined,
 		example: '2025-08-18T01:30:04.549Z',
 	})
-	todate: string;
+	toDate: string;
 
 	@MaxLength(50)
 	@IsString()
@@ -58,5 +58,5 @@ export class GitHubQueryDTO {
 		default: 'Issue-tracker-board',
 		example: 'project-board',
 	})
-	projectboard: string;
+	projectBoard: string;
 }

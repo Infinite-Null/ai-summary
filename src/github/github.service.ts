@@ -39,53 +39,12 @@ export class GithubService {
 	async fetchIssues(
 		owner: string,
 		repo: string,
-		since: Date,
-		body: boolean = false,
-		comment: boolean = false,
+		fromDate: string,
+		toDate: string,
+		projectBoard: string,
 	): Promise<Issue[]> {
-		const query = getFetchIssueQuery(body, comment);
-
-		let issues: Issue[] = [];
-		let after: string | null = null;
-
-		while (true) {
-			const response = await this.client.post(
-				this.GITHUB_API_GQL_ENDPOINT ?? '',
-				{
-					query,
-					variables: { owner, repo, since, after },
-				},
-				{ headers: { Authorization: `Bearer ${this.GITHUB_TOKEN}` } },
-			);
-
-			const data = response.data as GithubIssuesResponse;
-			if (data.errors) {
-				throw new HttpException(data.errors, 500);
-			}
-
-			const repoData = data.data.repository;
-			if (!repoData) break;
-
-			issues = issues.concat(repoData.issues.nodes);
-
-			const pageInfo = repoData.issues.pageInfo;
-			if (!pageInfo.hasNextPage) break;
-
-			after = pageInfo.endCursor;
-		}
-
-		return issues;
-	}
-
-	async fetchIssuesWithDateRange(
-		owner: string,
-		repo: string,
-		fromdate: string,
-		todate: string,
-		projectboard: string,
-	): Promise<Issue[]> {
-		const nonBlockedIssueGQLQuery = getFetchIssueQueryWitDateRange(true);
-		const nonBlockedIssueSearchQuery = `repo:${owner}/${repo} is:issue updated:${this.formatToYYMMDD(fromdate)}..${this.formatToYYMMDD(todate)}`;
+		const issueGQLQuery = getFetchIssueQueryWitDateRange(true);
+		const issueSearchQuery = `repo:${owner}/${repo} is:issue updated:${this.formatToYYMMDD(fromDate)}..${this.formatToYYMMDD(toDate)}`;
 
 		let issues: Issue[] = [];
 		let nonBlockedIssueAfterPointer: string | null = null;
@@ -94,9 +53,9 @@ export class GithubService {
 			const response = await this.client.post(
 				this.GITHUB_API_GQL_ENDPOINT ?? '',
 				{
-					query: nonBlockedIssueGQLQuery,
+					query: issueGQLQuery,
 					variables: {
-						searchQuery: nonBlockedIssueSearchQuery,
+						searchQuery: issueSearchQuery,
 						after: nonBlockedIssueAfterPointer,
 					},
 				},
@@ -123,7 +82,7 @@ export class GithubService {
 		const processedIssues = issues
 			.map((item) => {
 				const projectItems = item.projectItems.items
-					.filter((e) => e.project?.title === projectboard) // Filter issues by project board name.
+					.filter((e) => e.project?.title === projectBoard) // Filter issues by project board name.
 					.map((e) => ({
 						...e,
 						fieldValues: e.fieldValues
