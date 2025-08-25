@@ -171,7 +171,7 @@ export class AiEngineService {
 				pageContent: slackJsonData,
 				metadata: {
 					source: 'slack',
-					channelName: slackData.channelName,
+					channelName: channelName,
 					startDate: formattedStartDate,
 					endDate: formattedEndDate,
 				},
