@@ -328,10 +328,10 @@ export class SlackService {
 		try {
 			// Split the text by the known question strings
 			const yesterdayMatch = standup.match(
-				/What did you accomplish on the previous working day\?\*\n(.*?)(?=\*What are you working on today\?\*)/s,
+				/What did you accomplish on the previous working day\?\*?\n(.*?)(?=What are you working on today\?\*?)/s,
 			);
 			const todayMatch = standup.match(
-				/What are you working on today\?\*\n(.*?)(?=\*Mention any blockers)/s,
+				/What are you working on today\?\*?\n(.*?)(?=Mention any blockers)/s,
 			);
 			const blockersMatch = standup.match(
 				/Mention any blockers.*\n(.*?)$/s,
