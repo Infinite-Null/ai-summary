@@ -9,7 +9,7 @@ import { SummarizeDTO } from './dto/summarize-dto';
 import { FORMAT } from './prompts';
 import { MapReduceService } from './summarization-algorithm/map-reduce.service';
 import { StuffService } from './summarization-algorithm/stuff.service';
-import { ProjectSummarySchema } from './types/output';
+import { ProjectSummarySchema, Algorithm } from './types';
 import { ModelFactoryService } from 'src/model-factory/model-factory.service';
 
 @Injectable()
@@ -67,7 +67,10 @@ export class AiEngineService {
 				projectStatus,
 				summary: response?.summary?.replaceAll('\n\n', '\n') ?? '',
 				riskBlockerActionNeeded:
-					response?.riskBlockerActionNeeded ?? '',
+					response?.riskBlockerActionNeeded.replaceAll(
+						'\n\n',
+						'\n',
+					) ?? '',
 				completed: response?.taskDetails?.completed ?? '',
 				inProgress: response?.taskDetails?.inProgress ?? '',
 				inReview: response?.taskDetails?.inReview ?? '',
@@ -87,12 +90,8 @@ export class AiEngineService {
 		model,
 		temperature,
 		algorithm,
-		channelName,
-		startDate,
-		endDate,
-		projectName,
-		docName,
-		projectStatus,
+		slackData,
+		metadata,
 		githubData,
 	}: SummarizeDTO) {
 		const trace = this.langfuse.trace({
@@ -103,6 +102,11 @@ export class AiEngineService {
 				temperature,
 			},
 		});
+
+		const { startDate, endDate, projectName, projectStatus, docName } =
+			metadata;
+
+		const { channelName } = slackData;
 
 		this.prompt = await this.langfuse.getPrompt('ai-summary-poc');
 		const llm = this.modelFactoryService.createModelInstance(
@@ -129,9 +133,9 @@ export class AiEngineService {
 			: formatDate('2025-08-18T17:30:04.549Z');
 
 		const standupData = await this.slackService.getStandups({
-			channelName: channelName || 'proj-ai-internal',
-			startDate: startDate || '2025-08-18T01:30:04.549Z',
-			endDate: endDate || '2025-08-18T17:30:04.549Z',
+			channelName: channelName,
+			startDate: startDate,
+			endDate: endDate,
 		});
 
 		/**
@@ -164,10 +168,10 @@ export class AiEngineService {
 			);
 		}
 
-		const slackData = JSON.stringify(standupData, null, 2);
+		const slackJsonData = JSON.stringify(standupData, null, 2);
 		docs.push(
 			new Document({
-				pageContent: slackData,
+				pageContent: slackJsonData,
 				metadata: {
 					source: 'slack',
 					channelName: channelName,
@@ -198,8 +202,8 @@ export class AiEngineService {
 
 		// If the total number of tokens is less than the maximum allowed, use the "stuff" summarization method.
 		if (
-			algorithm === 'stuff' ||
-			(algorithm === 'auto' && totalTokens < this.MAX_TOKENS)
+			algorithm === Algorithm.Stuff ||
+			(algorithm === Algorithm.Auto && totalTokens < this.MAX_TOKENS)
 		) {
 			this.logger.log('Running stuff summarization algorithm');
 
