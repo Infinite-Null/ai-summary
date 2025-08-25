@@ -23,8 +23,8 @@ export class MetadataQueryDTO {
 	@IsDateString()
 	@ApiProperty({
 		description: 'The end date for fetching messages (ISO format).',
-		default: '2025-08-18T17:30:04.549Z',
-		example: '2025-08-18T17:30:04.549Z',
+		default: '2025-08-26T17:30:04.549Z',
+		example: '2025-08-26T17:30:04.549Z',
 	})
 	endDate: string;
 

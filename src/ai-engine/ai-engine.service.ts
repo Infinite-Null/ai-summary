@@ -67,7 +67,10 @@ export class AiEngineService {
 				projectStatus,
 				summary: response?.summary?.replaceAll('\n\n', '\n') ?? '',
 				riskBlockerActionNeeded:
-					response?.riskBlockerActionNeeded ?? '',
+					response?.riskBlockerActionNeeded.replaceAll(
+						'\n\n',
+						'\n',
+					) ?? '',
 				completed: response?.taskDetails?.completed ?? '',
 				inProgress: response?.taskDetails?.inProgress ?? '',
 				inReview: response?.taskDetails?.inReview ?? '',
