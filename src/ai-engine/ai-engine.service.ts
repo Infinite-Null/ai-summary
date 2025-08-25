@@ -103,6 +103,8 @@ export class AiEngineService {
 		const { startDate, endDate, projectName, projectStatus, docName } =
 			metadata;
 
+		const { channelName } = slackData;
+
 		this.prompt = await this.langfuse.getPrompt('ai-summary-poc');
 		const llm = this.modelFactoryService.createModelInstance(
 			provider,
@@ -128,7 +130,7 @@ export class AiEngineService {
 			: formatDate('2025-08-18T17:30:04.549Z');
 
 		const standupData = await this.slackService.getStandups({
-			channelName: slackData.channelName,
+			channelName: channelName,
 			startDate: startDate,
 			endDate: endDate,
 		});
