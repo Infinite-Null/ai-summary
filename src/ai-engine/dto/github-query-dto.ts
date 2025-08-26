@@ -6,7 +6,7 @@ export class GitHubQueryDTO {
 	@ApiProperty({
 		description: 'Considers GitHub data if set to true.',
 		default: false,
-		example: false,
+		example: true,
 	})
 	enabled: boolean;
 
@@ -15,7 +15,7 @@ export class GitHubQueryDTO {
 	@ApiProperty({
 		description: 'The owner of the GitHub repository.',
 		default: 'username',
-		example: 'username',
+		example: 'rtCamp',
 	})
 	owner: string;
 
@@ -24,7 +24,7 @@ export class GitHubQueryDTO {
 	@ApiProperty({
 		description: 'The name of the GitHub repository.',
 		default: 'repo-name',
-		example: 'repo-name',
+		example: 'AI-Internal',
 	})
 	repo: string;
 
@@ -32,8 +32,8 @@ export class GitHubQueryDTO {
 	@IsString()
 	@ApiProperty({
 		description: 'The name of the GitHub Repos Project Board.',
-		default: 'Issue-tracker-board',
-		example: 'project-board',
+		default: 'project-board',
+		example: 'AI-Internal',
 	})
 	projectBoard: string;
 }
