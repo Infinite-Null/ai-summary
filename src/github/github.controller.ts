@@ -14,15 +14,15 @@ export class GithubController {
 	getStatus(
 		@Query('owner') owner: string,
 		@Query('repo') repo: string,
-		@Query('fromDate') fromDate: string,
-		@Query('toDate') toDate: string,
+		@Query('startDate') startDate: string,
+		@Query('endDate') endDate: string,
 		@Query('projectBoard') projectBoard: string,
 	) {
 		return this.githubService.fetchIssues(
 			owner,
 			repo,
-			fromDate,
-			toDate,
+			startDate,
+			endDate,
 			projectBoard,
 		);
 	}

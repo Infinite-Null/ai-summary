@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-	IsBoolean,
-	IsDateString,
-	IsOptional,
-	IsString,
-	MaxLength,
-} from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class GitHubQueryDTO {
 	@IsOptional()
@@ -33,23 +27,6 @@ export class GitHubQueryDTO {
 		example: 'repo-name',
 	})
 	repo: string;
-
-	@IsDateString()
-	@ApiProperty({
-		description: 'The date from which to fetch issues.',
-		default: undefined,
-		example: '2025-08-18T01:30:04.549Z',
-	})
-	fromDate: string;
-
-	@IsDateString()
-	@ApiProperty({
-		description:
-			'Date must be today or later than the specified "fromdate" date to fetch issues.',
-		default: undefined,
-		example: '2025-08-18T01:30:04.549Z',
-	})
-	toDate: string;
 
 	@MaxLength(50)
 	@IsString()

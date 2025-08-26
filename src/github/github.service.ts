@@ -23,12 +23,12 @@ export class GithubService {
 	async fetchIssues(
 		owner: string,
 		repo: string,
-		fromDate: string,
-		toDate: string,
+		startDate: string,
+		endDate: string,
 		projectBoard: string,
 	): Promise<Issue[]> {
 		const issueGQLQuery = getFetchIssueQuery(true);
-		const issueSearchQuery = `repo:${owner}/${repo} is:issue updated:${formatToYYMMDD(fromDate)}..${formatToYYMMDD(toDate)}`;
+		const issueSearchQuery = `repo:${owner}/${repo} is:issue updated:${formatToYYMMDD(startDate)}..${formatToYYMMDD(endDate)}`;
 
 		let issues: Issue[] = [];
 		let nonBlockedIssueAfterPointer: string | null = null;
