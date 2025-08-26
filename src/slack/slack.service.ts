@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConversationsHistoryResponse, WebClient } from '@slack/web-api';
 import {
-	FetchMessagesParams,
+	FetchStandupParams,
 	FormattedStandup,
 	ParsedStandup,
 	SlackMessage,
@@ -10,6 +10,10 @@ import {
 } from './types';
 import { Channel } from '@slack/web-api/dist/types/response/ConversationsListResponse';
 
+/**
+ * Service for interacting with Slack API, fetching standup messages, formatting them, and extracting user and thread information.
+ * Handles channel lookup, message retrieval, reply threading, and parsing standup formats for downstream summarization and reporting.
+ */
 @Injectable()
 export class SlackService {
 	/**
@@ -19,8 +23,15 @@ export class SlackService {
 		timestamp: true,
 	});
 
+	/**
+	 * Slack WebClient instance for API calls.
+	 */
 	private readonly client: WebClient;
 
+	/**
+	 * Initializes the SlackService with a WebClient using the bot token from environment variables.
+	 * @throws Error if SLACK_BOT_TOKEN is not set.
+	 */
 	constructor() {
 		const token = process.env.SLACK_BOT_TOKEN;
 		if (!token) {
@@ -32,15 +43,14 @@ export class SlackService {
 	}
 
 	/**
-	 * Converts a channel name to its ID by querying the Slack API
-	 * @param channelName The name of the channel (without the # prefix)
-	 * @returns The channel ID
-	 * @throws Error if channel is not found or API call fails
+	 * Converts a channel name to its ID by querying the Slack API.
+	 *
+	 * @param channelName - The name of the channel (without the # prefix).
+	 * @returns The channel ID string.
+	 * @throws NotFoundException if channel is not found, or Error if API call fails.
 	 */
 	async getChannelId(channelName: string): Promise<string> {
 		try {
-			this.logger.debug(`Looking up channel ID for: ${channelName}`);
-
 			// Remove # prefix if present
 			const cleanChannelName = channelName.replace(/^#/, '');
 
@@ -57,10 +67,10 @@ export class SlackService {
 			);
 
 			if (!channel || !channel.id) {
-				throw new Error(`Channel #${cleanChannelName} not found`);
+				throw new NotFoundException(
+					`Channel #${cleanChannelName} not found`,
+				);
 			}
-
-			this.logger.debug(`Found channel ID: ${channel.id}`);
 
 			return channel.id;
 		} catch (error) {
@@ -73,6 +83,15 @@ export class SlackService {
 		}
 	}
 
+	/**
+	 * Fetches all messages from a Slack channel within an optional date range.
+	 *
+	 * @param channelId - The Slack channel ID.
+	 * @param startDate - Optional start date (ISO string).
+	 * @param endDate - Optional end date (ISO string).
+	 * @returns Array of SlackMessage objects.
+	 * @throws Error if Slack API call fails.
+	 */
 	async getMessages(
 		channelId: string,
 		startDate?: string,
@@ -84,8 +103,6 @@ export class SlackService {
 
 			let allMessages: ConversationsHistoryResponse['messages'] = [];
 			let cursor: string | undefined;
-
-			this.logger.debug(`Fetching messages from channel: ${channelId}`);
 
 			do {
 				const result: ConversationsHistoryResponse =
@@ -108,8 +125,6 @@ export class SlackService {
 				cursor = result.response_metadata?.next_cursor;
 			} while (cursor);
 
-			this.logger.debug(`Retrieved ${allMessages.length} messages`);
-
 			const slackMessages: SlackMessage[] = allMessages.map((msg) => ({
 				username: msg.username,
 				subtype: msg.subtype,
@@ -128,6 +143,12 @@ export class SlackService {
 		}
 	}
 
+	/**
+	 * Filters Slack messages to extract only standup bot messages.
+	 *
+	 * @param messages - Array of SlackMessage objects.
+	 * @returns Array of SlackMessage objects that are standup bot messages.
+	 */
 	extractStandupMessages(messages: SlackMessage[]): SlackMessage[] {
 		return messages.filter((msg) => {
 			return (
@@ -137,6 +158,12 @@ export class SlackService {
 		});
 	}
 
+	/**
+	 * Retrieves Slack user information (username and real name) for a given user ID.
+	 *
+	 * @param userId - Slack user ID string.
+	 * @returns SlackUser object or null if not found.
+	 */
 	async getUserInfo(userId: string): Promise<SlackUser | null> {
 		try {
 			const result = await this.client.users.info({ user: userId });
@@ -148,8 +175,6 @@ export class SlackService {
 			if (!username || !name) {
 				return null;
 			}
-
-			this.logger.debug(`Fetched user info for ${userId}`);
 
 			return {
 				username,
@@ -164,11 +189,13 @@ export class SlackService {
 	}
 
 	/**
-	 * Retrieves replies to a specific message in a thread
-	 * @param channelId The ID of the channel containing the thread
-	 * @param threadTs The timestamp of the parent message
-	 * @param options Optional parameters for pagination and filtering
-	 * @returns Array of reply messages in the thread
+	 * Retrieves replies to a specific message in a thread.
+	 *
+	 * @param channelId - The ID of the channel containing the thread.
+	 * @param threadTs - The timestamp of the parent message.
+	 * @param options - Optional parameters for pagination and filtering.
+	 * @returns Array of reply SlackMessage objects in the thread.
+	 * @throws Error if Slack API call fails.
 	 */
 	async getMessageReplies(
 		channelId: string,
@@ -181,10 +208,6 @@ export class SlackService {
 		} = {},
 	): Promise<SlackMessage[]> {
 		try {
-			this.logger.debug(
-				`Fetching replies for message ${threadTs} in channel ${channelId}`,
-			);
-
 			let allReplies: SlackMessage[] = [];
 			let cursor: string | undefined;
 
@@ -204,7 +227,6 @@ export class SlackService {
 				}
 
 				if (result.messages) {
-					// Filter out the parent message (first message in thread)
 					const replies = await Promise.all(
 						result.messages.slice(1).map(async (msg) => {
 							let name = '';
@@ -234,7 +256,6 @@ export class SlackService {
 				}
 			} while (cursor);
 
-			this.logger.debug(`Retrieved ${allReplies.length} replies`);
 			return allReplies;
 		} catch (error) {
 			const errorMessage =
@@ -248,6 +269,12 @@ export class SlackService {
 		}
 	}
 
+	/**
+	 * Formats standup messages and their replies into a structured FormattedStandup object.
+	 *
+	 * @param standupMessagesWithReplies - Array of SlackMessage objects with attached replies.
+	 * @returns FormattedStandup object mapping timestamps to valid standup entries.
+	 */
 	private formatStandup(
 		standupMessagesWithReplies: Array<
 			SlackMessage & { replies?: SlackMessage[] }
@@ -268,11 +295,19 @@ export class SlackService {
 					continue;
 				}
 
-				validEntries.push({
-					name: reply.name,
-					user: reply.user,
-					standup: this.parseStandup(reply.text),
-				});
+				const standup = this.parseStandup(reply.text);
+
+				if (
+					standup.yesterday.length &&
+					standup.today.length &&
+					standup.blocker.length
+				) {
+					validEntries.push({
+						name: reply.name,
+						user: reply.user,
+						standup,
+					});
+				}
 			}
 
 			if (validEntries.length > 0) {
@@ -283,14 +318,20 @@ export class SlackService {
 		return formatted;
 	}
 
+	/**
+	 * Parses a standup message string into its component sections: yesterday, today, blockers.
+	 *
+	 * @param standup - Raw standup message string.
+	 * @returns ParsedStandup object with arrays for each section and the raw text.
+	 */
 	parseStandup(standup: string): ParsedStandup {
 		try {
 			// Split the text by the known question strings
 			const yesterdayMatch = standup.match(
-				/What did you accomplish on the previous working day\?\*\n(.*?)(?=\*What are you working on today\?\*)/s,
+				/What did you accomplish on the previous working day\?\*?\n(.*?)(?=What are you working on today\?\*?)/s,
 			);
 			const todayMatch = standup.match(
-				/What are you working on today\?\*\n(.*?)(?=\*Mention any blockers)/s,
+				/What are you working on today\?\*?\n(.*?)(?=Mention any blockers)/s,
 			);
 			const blockersMatch = standup.match(
 				/Mention any blockers.*\n(.*?)$/s,
@@ -298,23 +339,41 @@ export class SlackService {
 
 			// Extract and clean up the content
 			return {
-				yesterday: yesterdayMatch?.[1]?.trim() || '',
-				today: todayMatch?.[1]?.trim() || '',
-				blocker: blockersMatch?.[1]?.trim() || '',
+				yesterday:
+					yesterdayMatch?.[1]
+						?.split('\n')
+						.map((s) => s.trim())
+						.filter(Boolean) || [],
+				today:
+					todayMatch?.[1]
+						?.split('\n')
+						.map((s) => s.trim())
+						.filter(Boolean) || [],
+				blocker:
+					blockersMatch?.[1]
+						?.split('\n')
+						.map((s) => s.trim())
+						.filter(Boolean) || [],
 				text: standup.trim(),
 			};
 		} catch (error) {
 			this.logger.warn('Failed to parse standup text:', error);
 			return {
-				yesterday: '',
-				today: '',
-				blocker: '',
+				yesterday: [],
+				today: [],
+				blocker: [],
 				text: '',
 			};
 		}
 	}
 
-	async getStandups(params: FetchMessagesParams): Promise<FormattedStandup> {
+	/**
+	 * Retrieves and formats standup entries from a Slack channel within a date range.
+	 *
+	 * @param params - FetchStandupParams object containing channelName, startDate, endDate.
+	 * @returns FormattedStandup object mapping timestamps to valid standup entries.
+	 */
+	async getStandups(params: FetchStandupParams): Promise<FormattedStandup> {
 		const channelId = await this.getChannelId(params.channelName);
 
 		const messages = await this.getMessages(
@@ -332,9 +391,6 @@ export class SlackService {
 				const replies = await this.getMessageReplies(
 					channelId,
 					message.ts,
-				);
-				this.logger.debug(
-					`Found ${replies.length} replies for message ${message.ts}`,
 				);
 				standupMessagesWithReplies.push({
 					...message,

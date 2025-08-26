@@ -4,7 +4,7 @@ import { PromptTemplate } from '@langchain/core/prompts';
 import { Injectable } from '@nestjs/common';
 import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
 import { Document } from 'langchain/document';
-import { ProjectSummarySchema } from '../types/output';
+import { ProjectSummarySchema } from '../types';
 
 @Injectable()
 export class StuffService {

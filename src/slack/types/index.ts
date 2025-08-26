@@ -1,4 +1,4 @@
-export interface FetchMessagesParams {
+export interface FetchStandupParams {
 	channelName: string;
 	startDate: string;
 	endDate: string;
@@ -20,9 +20,9 @@ export interface SlackUser {
 }
 
 export interface ParsedStandup {
-	yesterday: string;
-	today: string;
-	blocker: string;
+	yesterday: string[];
+	today: string[];
+	blocker: string[];
 	text: string;
 }
 
