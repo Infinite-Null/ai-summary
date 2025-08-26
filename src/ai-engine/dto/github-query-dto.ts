@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-	IsBoolean,
-	IsDateString,
-	IsOptional,
-	IsString,
-	MaxLength,
-} from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class GitHubQueryDTO {
 	@IsOptional()
@@ -34,29 +28,12 @@ export class GitHubQueryDTO {
 	})
 	repo: string;
 
-	@IsDateString()
+	@MaxLength(50)
+	@IsString()
 	@ApiProperty({
-		description: 'The date from which to fetch issues.',
-		default: undefined,
-		example: '2025-08-18T01:30:04.549Z',
+		description: 'The name of the GitHub Repos Project Board.',
+		default: 'Issue-tracker-board',
+		example: 'project-board',
 	})
-	since: string;
-
-	@IsOptional()
-	@IsBoolean()
-	@ApiProperty({
-		description: 'Fetch issue body for summarization.',
-		default: false,
-		example: false,
-	})
-	fetchBody: boolean;
-
-	@IsOptional()
-	@IsBoolean()
-	@ApiProperty({
-		description: 'Fetch comments for summarization.',
-		default: false,
-		example: false,
-	})
-	fetchComments: boolean;
+	projectBoard: string;
 }
