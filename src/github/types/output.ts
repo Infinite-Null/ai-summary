@@ -13,6 +13,19 @@ export interface GithubIssuesResponse {
 	errors?: any;
 }
 
+export interface GitHubSearchIssueResponse {
+	data: {
+		search: {
+			pageInfo: {
+				hasNextPage: boolean;
+				endCursor: string | null;
+			};
+			nodes: any[];
+		};
+	};
+	errors?: any;
+}
+
 export interface Issue {
 	issue_id: number;
 	title: string;
@@ -20,16 +33,39 @@ export interface Issue {
 	url: string;
 	updatedAt: string; // ISO date string
 	closedAt: string | null; // nullable ISO date
-	labels: {
-		nodes: Label[];
+	labels?: {
+		items: Label[];
 	};
 	milestone: Milestone | null;
-	crossReferencedPRs: {
-		nodes: CrossReferencedPR[];
+	crossReferencedPRs?: {
+		items: CrossReferencedPR[];
 	};
 	projectItems: {
-		nodes: ProjectItem[];
+		items: ProjectItem[];
 	};
+	comments?: Comments;
+}
+
+export interface CommentAuthor {
+	login: string;
+}
+
+export interface CommentItem {
+	author: CommentAuthor;
+	body: string;
+	createdAt: string; // ISO 8601 datetime
+	updatedAt: string; // ISO 8601 datetime
+	url: string;
+}
+
+export interface CommentPageInfo {
+	hasNextPage: boolean;
+	endCursor: string | null;
+}
+
+export interface Comments {
+	pageInfo: CommentPageInfo;
+	items: CommentItem[];
 }
 
 export interface Label {
@@ -58,7 +94,7 @@ export interface ProjectItem {
 		number: number;
 	};
 	fieldValues: {
-		nodes: ProjectFieldValue[];
+		items: ProjectFieldValue[];
 	};
 }
 

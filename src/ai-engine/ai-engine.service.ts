@@ -147,13 +147,13 @@ export class AiEngineService {
 		const docs: Document[] = [];
 
 		if (githubData.enabled) {
-			const { fetchBody, fetchComments, owner, repo, since } = githubData;
+			const { owner, repo, projectBoard } = githubData;
 			const githubResponse = await this.githubService.fetchIssues(
 				owner,
 				repo,
-				new Date(since),
-				fetchBody,
-				fetchComments,
+				startDate,
+				endDate,
+				projectBoard,
 			);
 			docs.push(
 				new Document({
@@ -162,7 +162,8 @@ export class AiEngineService {
 						source: 'github',
 						owner,
 						repo,
-						since: since,
+						startDate: formattedStartDate,
+						endDate: formattedEndDate,
 					},
 				}),
 			);

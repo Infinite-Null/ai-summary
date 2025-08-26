@@ -1,8 +1,9 @@
 import { Injectable, HttpException } from '@nestjs/common';
 import { AxiosInstance } from 'axios';
 import { HttpService } from '@nestjs/axios';
-import { GithubIssuesResponse, Issue } from './types/output';
+import { Issue, GitHubSearchIssueResponse } from './types/output';
 import { getFetchIssueQuery } from './queries/graphql';
+import { formatToYYMMDD } from '../common/utils/object-utils';
 
 @Injectable()
 export class GithubService {
@@ -22,41 +23,85 @@ export class GithubService {
 	async fetchIssues(
 		owner: string,
 		repo: string,
-		since: Date,
-		body: boolean = false,
-		comment: boolean = false,
+		startDate: string,
+		endDate: string,
+		projectBoard: string,
 	): Promise<Issue[]> {
-		const query = getFetchIssueQuery(body, comment);
+		const issueGQLQuery = getFetchIssueQuery(true);
+		const issueSearchQuery = `repo:${owner}/${repo} is:issue updated:${formatToYYMMDD(startDate)}..${formatToYYMMDD(endDate)}`;
 
 		let issues: Issue[] = [];
-		let after: string | null = null;
+		let nonBlockedIssueAfterPointer: string | null = null;
 
 		while (true) {
 			const response = await this.client.post(
 				this.GITHUB_API_GQL_ENDPOINT ?? '',
 				{
-					query,
-					variables: { owner, repo, since, after },
+					query: issueGQLQuery,
+					variables: {
+						searchQuery: issueSearchQuery,
+						after: nonBlockedIssueAfterPointer,
+					},
 				},
 				{ headers: { Authorization: `Bearer ${this.GITHUB_TOKEN}` } },
 			);
 
-			const data = response.data as GithubIssuesResponse;
+			const data = response.data as GitHubSearchIssueResponse;
+
 			if (data.errors) {
 				throw new HttpException(data.errors, 500);
 			}
 
-			const repoData = data.data.repository;
-			if (!repoData) break;
+			const searchData = data?.data?.search;
 
-			issues = issues.concat(repoData.issues.nodes);
+			if (!searchData) break;
 
-			const pageInfo = repoData.issues.pageInfo;
+			issues = issues.concat(searchData.nodes);
+			const pageInfo = searchData.pageInfo;
 			if (!pageInfo.hasNextPage) break;
 
-			after = pageInfo.endCursor;
+			nonBlockedIssueAfterPointer = pageInfo.endCursor;
 		}
 
-		return issues;
+		const processedIssues = issues
+			.map((item) => {
+				const projectItems = item.projectItems.items
+					.filter((e) => e.project?.title === projectBoard) // Filter issues by project board name.
+					.map((e) => ({
+						...e,
+						fieldValues: e.fieldValues
+							? {
+									...e.fieldValues,
+									items: e.fieldValues.items.filter(
+										(f) => 'name' in f, // Type guard to ensure 'name' exists to exclude any empty objects.
+									),
+								}
+							: e.fieldValues,
+					}))
+					.filter((e) => e.fieldValues.items.length > 0); // Exclude issues which aren't assigned to any columns.
+				const isBlocked = projectItems.some((item) =>
+					item.fieldValues.items.some(
+						(status) => status.name === 'Blocked',
+					),
+				);
+
+				const { comments, labels, crossReferencedPRs, ...rest } = item;
+
+				return {
+					...rest,
+					...(labels && labels.items.length > 0
+						? { labels: labels }
+						: {}),
+					...(crossReferencedPRs &&
+					crossReferencedPRs.items.length > 0
+						? { crossReferencedPRs: crossReferencedPRs }
+						: {}),
+					projectItems: { ...item.projectItems, items: projectItems },
+					...(isBlocked ? { comments: comments } : {}), // Include comments property only for blocked issues.
+				};
+			})
+			.filter((item) => item.projectItems.items.length > 0); // Exclude issues which aren't assigned to any projects.
+
+		return processedIssues;
 	}
 }
