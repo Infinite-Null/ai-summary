@@ -58,12 +58,14 @@ export class AiEngineService {
 		to: string | undefined,
 		projectStatus: string | undefined,
 		docName: string | undefined,
+		email: string | undefined,
 	) {
 		return {
 			replacements: {
 				projectName,
 				from,
 				to,
+				name: email,
 				projectStatus,
 				summary: response?.summary?.replaceAll('\n\n', '\n') ?? '',
 				riskBlockerActionNeeded:
@@ -103,8 +105,14 @@ export class AiEngineService {
 			},
 		});
 
-		const { startDate, endDate, projectName, projectStatus, docName } =
-			metadata;
+		const {
+			startDate,
+			endDate,
+			projectName,
+			projectStatus,
+			docName,
+			email,
+		} = metadata;
 
 		const { channelName } = slackData;
 
@@ -242,6 +250,7 @@ export class AiEngineService {
 				formattedEndDate,
 				projectStatus,
 				docName,
+				email,
 			);
 
 			const documentUrl = await this.googleDocService.generateDocument(
@@ -305,6 +314,7 @@ export class AiEngineService {
 			formattedEndDate,
 			projectStatus,
 			docName,
+			email,
 		);
 
 		const documentUrl = await this.googleDocService.generateDocument(

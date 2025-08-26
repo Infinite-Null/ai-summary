@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
 	IsDateString,
+	IsEmail,
 	IsEnum,
 	IsOptional,
 	IsString,
@@ -57,4 +58,12 @@ export class MetadataQueryDTO {
 		example: 'AI Internal',
 	})
 	projectName: string;
+
+	@IsOptional()
+	@IsEmail()
+	@ApiProperty({
+		description: 'The email of the user.',
+		default: 'test@example.com',
+	})
+	email: string;
 }
