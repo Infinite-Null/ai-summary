@@ -23,6 +23,7 @@ export interface ParsedStandup {
 	yesterday: string[];
 	today: string[];
 	blocker: string[];
+	demo: string[];
 	text: string;
 }
 

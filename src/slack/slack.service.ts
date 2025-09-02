@@ -53,26 +53,36 @@ export class SlackService {
 		try {
 			// Remove # prefix if present
 			const cleanChannelName = channelName.replace(/^#/, '');
+			let cursor: string | undefined = undefined;
+			let foundChannelId: string | undefined = undefined;
 
-			// Get list of all channels
-			const result = await this.client.conversations.list();
+			do {
+				const result = await this.client.conversations.list({
+					cursor,
+					limit: 1000,
+				});
+				this.logger.log(
+					`Fetched channels from Slack API: ${JSON.stringify(result.channels)}`,
+				);
+				if (!result.channels) {
+					throw new Error('No channels returned from Slack API');
+				}
+				const channel = result.channels.find(
+					(channel: Channel) => channel.name === cleanChannelName,
+				);
+				if (channel && channel.id) {
+					foundChannelId = channel.id;
+					break;
+				}
+				cursor = result.response_metadata?.next_cursor;
+			} while (cursor);
 
-			if (!result.channels) {
-				throw new Error('No channels returned from Slack API');
-			}
-
-			// Find the channel by name
-			const channel = result.channels.find(
-				(channel: Channel) => channel.name === cleanChannelName,
-			);
-
-			if (!channel || !channel.id) {
+			if (!foundChannelId) {
 				throw new NotFoundException(
 					`Channel #${cleanChannelName} not found`,
 				);
 			}
-
-			return channel.id;
+			return foundChannelId;
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error
@@ -153,7 +163,7 @@ export class SlackService {
 		return messages.filter((msg) => {
 			return (
 				msg.subtype === 'bot_message' &&
-				msg.username?.includes('Daily Standup')
+				msg.username?.includes('AI Internal - Daily Tasks Tracker')
 			);
 		});
 	}
@@ -326,31 +336,40 @@ export class SlackService {
 	 */
 	parseStandup(standup: string): ParsedStandup {
 		try {
-			// Split the text by the known question strings
+			// Regexes for new standup structure
 			const yesterdayMatch = standup.match(
-				/What did you accomplish on the previous working day\?\*?\n(.*?)(?=What are you working on today\?\*?)/s,
-			);
-			const todayMatch = standup.match(
-				/What are you working on today\?\*?\n(.*?)(?=Mention any blockers)/s,
-			);
-			const blockersMatch = standup.match(
-				/Mention any blockers.*\n(.*?)$/s,
+				/(What did you work on yesterday|What you worked on yesterday)[\s\S]*?(?:\n|:)([\s\S]*?)(?=(What are you working on today|What you are working on today))/i,
 			);
 
-			// Extract and clean up the content
+			const todayMatch = standup.match(
+				/(What are you working on today|What you are working on today)[\s\S]*?(?:\n|:)([\s\S]*?)(?=(Any blockers encountered|Any blockers encountered of conversations needed|Any blockers to conversations needed))/i,
+			);
+
+			const blockersMatch = standup.match(
+				/(Any blockers encountered|Any blockers encountered of conversations needed|Any blockers to conversations needed)[\s\S]*?(?:\n|:)([\s\S]*?)(?=(Anything you'd like to demo internally|Anything you’d like to demo internally))/i,
+			);
+
+			const demoMatch = standup.match(
+				/(Anything you'd like to demo internally|Anything you’d like to demo internally)[\s\S]*?(?:\n|:)?([\s\S]*)$/i,
+			);
 			return {
 				yesterday:
-					yesterdayMatch?.[1]
+					yesterdayMatch?.[2]
 						?.split('\n')
 						.map((s) => s.trim())
 						.filter(Boolean) || [],
 				today:
-					todayMatch?.[1]
+					todayMatch?.[2]
 						?.split('\n')
 						.map((s) => s.trim())
 						.filter(Boolean) || [],
 				blocker:
-					blockersMatch?.[1]
+					blockersMatch?.[2]
+						?.split('\n')
+						.map((s) => s.trim())
+						.filter(Boolean) || [],
+				demo:
+					demoMatch?.[2]
 						?.split('\n')
 						.map((s) => s.trim())
 						.filter(Boolean) || [],
@@ -362,6 +381,7 @@ export class SlackService {
 				yesterday: [],
 				today: [],
 				blocker: [],
+				demo: [],
 				text: '',
 			};
 		}
